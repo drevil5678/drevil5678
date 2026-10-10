@@ -51,7 +51,7 @@ def copy_engine(bundle):
             (bundle/"katago/README-upstream.txt").write_bytes(z.read("README.txt"))
     elif platform.system() == "Windows":
         url = "https://github.com/lightvector/KataGo/releases/download/v1.16.3/katago-v1.16.3-eigenavx2-windows-x64.zip"
-        digest = "17744c274da5fc28761f0bcf8b7c4ec7421ae6937b3c0c246804e0d63fcea36e"
+        digest = "e104393ea46c3ce4814e416352c35adc163dd12ad22a07e7b556db0c3480a804"
         archive = verified_archive(url, digest)
         destination = bundle/"katago"
         destination.mkdir()
