@@ -65,11 +65,13 @@ node scripts/browser-smoke.cjs
 - AI 首選指該次官方分析回傳且經本機合法性過濾的候選中勝率最高者，並非窮舉所有合法著。完全同勝率時按 visits 較多、座標字典序排序，只禁一個首選；這些細節需納入競賽介面的公告。
 - 已加入 Google 表單匯出的 CSV 匯入流程；尚未串接 Google 表單帳號、報名成功郵件、Facebook 公告或金流。此系統不會代你發送訊息。
 - 選手姓名與火星積分只顯示給管理員，公開頁只顯示隊名與成績。JSON 匯出移除操作碼；完整資料庫備份仍含操作碼，需安全保管。
-- 本機已建立程式，但尚未提交／推送 GitHub，也未發布雲端環境或驗證新任務的還原。
+- 程式已提交並推送至 `codex/yanghai-local-test`；Windows runner 已完成測試、打包與真實 AI 診斷。雲端環境設定草稿尚未發布，亦未驗證新任務的還原。
 
 ## 本地免安裝執行檔
 
 現場伺服器可使用免安裝資料夾版，其他電腦仍用瀏覽器連線。雙擊啟動器、獨立資料目錄、10 分鐘自動備份、啟動前 WAL 完整備份和重複啟動保護已加入。詳見 [docs/本地執行檔.md](docs/本地執行檔.md)。
+
+Windows 使用者可先登入 GitHub，從 [已成功的建置紀錄 → Artifacts](https://github.com/drevil5678/drevil5678/actions/runs/38068759175#artifacts) 下載 `yanghai-windows-x64-v0.1.0`，約 24.7 MB。先解壓附件 ZIP，再完整解壓內層程式 ZIP，雙擊 `YanghaiTournament.exe`。此成品已通過 Windows runner 的測試及真實 KataGo 診斷；操作流程見 [本機測試快速指南](docs/本機測試快速指南.md)。
 
 ```bash
 uv sync --locked --group build

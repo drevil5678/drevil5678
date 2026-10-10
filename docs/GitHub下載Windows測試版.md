@@ -1,6 +1,8 @@
 # 從 GitHub 下載 Windows 測試版
 
-準備日期：2026-10-11。目前已準備建置流程，尚未推送或在 GitHub Windows runner 執行；此文件不代表 Windows 成品已建置成功。
+更新日期：2026-10-11。程式已推送至 `codex/yanghai-local-test`；GitHub Windows runner 已成功完成測試、免安裝版建置及真實 KataGo 分析診斷，並上傳約 24.7 MB 的成品附件。
+
+[開啟已成功的 Windows 成品下載頁](https://github.com/drevil5678/drevil5678/actions/runs/38068759175#artifacts)。請先登入 GitHub，再在 Artifacts 區域點選 `yanghai-windows-x64-v0.1.0`。
 
 `.github/workflows/windows-build.yml` 會在 `codex/yanghai-local-test` 分支更新時使用 Windows runner 執行，安裝鎖定依賴、跑測試、建置本地程式，再用隨附的真實 KataGo 診斷。全部成功後才上傳可下載的 ZIP 與 SHA-256 摘要。
 
