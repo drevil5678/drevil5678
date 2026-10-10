@@ -355,6 +355,32 @@ canvas {
   margin: 12px;
   break-inside: avoid;
 }
+.lan-url-label {
+  display: block;
+  margin: 14px 0;
+}
+#participant-url {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
+}
+#network-panel .heading {
+  margin-bottom: 0;
+}
+#network-panel .heading h2 {
+  margin-bottom: 6px;
+}
+#network-panel details {
+  margin-top: 18px;
+}
+#network-data {
+  overflow-wrap: anywhere;
+}
+.printed-url {
+  font-size: 30px;
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
 .seat-slip code {
   display: block;
   font-size: 17px;
@@ -416,7 +442,8 @@ footer {
   #notice {
     display: none !important;
   }
-  #print-seats {
+  body[data-print-mode="seats"] #print-seats,
+  body[data-print-mode="lan"] #print-network {
     display: block !important;
   }
   .seat-slip {

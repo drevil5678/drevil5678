@@ -97,8 +97,13 @@ def build(output):
                          "katago_model":"model/model.txt.gz","katago_config":"config/analysis.cfg",
                          "ai_concurrency":1,"auto_backup_seconds":600,"open_browser":True}
         (bundle/"tournament.example.json").write_text(json.dumps(configuration,indent=2)+"\n",encoding="utf-8")
+        if os.name == "nt":
+            (bundle/"Start-LAN.cmd").write_text(
+                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" --lan --no-pause\nif errorlevel 1 pause\n',
+                encoding="ascii")
         shutil.copy2(ROOT/"docs/本地執行檔.md", bundle/"READ-ME-FIRST.md")
         shutil.copy2(ROOT/"docs/活動部署.md", bundle/"EVENT-OPERATIONS.md")
+        shutil.copy2(ROOT/"docs/區域網路部署.md", bundle/"LAN-SETUP.md")
         provenance.update({"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),
                            "model_purpose":"CPU development/preflight only, not formal event certification"})
         (bundle/"BUILD-INFO.json").write_text(json.dumps(provenance,indent=2)+"\n",encoding="utf-8")

@@ -8,9 +8,11 @@ const { spawn } = require("child_process");
 const root = path.resolve(__dirname, ".."),
   data = fs.mkdtempSync(path.join(os.tmpdir(), "yanghai-browser-"));
 const port = 8767,
-  base = `http://127.0.0.1:${port}`;
+  initialBase = `http://127.0.0.1:${port}`;
+let base = initialBase;
 const env = {
   ...process.env,
+  HOST: "0.0.0.0",
   TOURNAMENT_DATA: data,
   KATAGO_BIN: path.join(root, ".runtime/katago/squashfs-root/AppRun"),
   KATAGO_MODEL: path.join(root, ".runtime/model.txt.gz"),
@@ -24,7 +26,7 @@ const server = spawn(
     "server.app:create_app",
     "--factory",
     "--host",
-    "127.0.0.1",
+    "0.0.0.0",
     "--port",
     String(port),
     "--workers",
@@ -64,7 +66,7 @@ async function get(endpoint, token) {
   browser = await chromium.launch({
     executablePath: "/usr/bin/chromium",
     headless: true,
-    args: ["--no-sandbox"],
+    args: ["--no-sandbox", "--no-proxy-server"],
   });
   const context = await browser.newContext({
       viewport: { width: 1440, height: 1050 },
@@ -75,10 +77,24 @@ async function get(endpoint, token) {
   admin.on("dialog", (dialog) =>
     dialog.accept(dialog.type() === "prompt" ? "瀏覽器操作測試" : ""),
   );
+  await admin.addInitScript(() => { window.print = () => {}; });
   await admin.goto(base + "/#admin");
   await admin.locator("#admin-token").fill(adminToken);
   await admin.locator("#login button[type=submit]").click();
   await admin.locator("#admin-content").waitFor({ state: "visible" });
+  const network = await get("/api/admin/network", adminToken);
+  assert(network.lan_enabled && network.interfaces.length, "LAN addresses unavailable");
+  base = new URL(network.interfaces[0].url).origin;
+  await admin.goto(base + "/#admin");
+  await admin.locator("#admin-token").fill(adminToken);
+  await admin.locator("#login button[type=submit]").click();
+  await admin.locator("#participant-url").filter({ visible: true }).waitFor();
+  assert((await admin.locator("#participant-url").inputValue()) === network.interfaces[0].url, "share URL wrong");
+  await admin.locator("#copy-participant-url").click();
+  await admin.locator("#notice").filter({ hasText: /已複製|Ctrl\+C/ }).waitFor();
+  await admin.locator("#network-refresh").click();
+  await admin.locator("#notice").filter({ hasText: "資訊已更新" }).waitFor();
+  await admin.locator("#network-panel").screenshot({ path: path.join(root, ".runtime/lan-admin.png") });
   await admin.locator('#settings-form [name="rules_confirmed"]').check();
   await admin.locator("#settings-form button[type=submit]").click();
   await admin.locator("#notice").filter({ hasText: "規則已儲存" }).waitFor();
@@ -95,6 +111,15 @@ async function get(endpoint, token) {
   await admin.locator("#referee-games .panel").waitFor();
   const state = await get("/api/admin/state", adminToken),
     game = state.games[0];
+  await admin.locator("#seats").click();
+  await admin.waitForFunction(() => document.body.dataset.printMode === "seats");
+  await admin.locator("#print-participant-url").click();
+  await admin.emulateMedia({ media: "print" });
+  const printed = await admin.locator("body").innerText();
+  assert(printed.includes(network.interfaces[0].url) && !printed.includes(game.seat_tokens.B) && !printed.includes(game.seat_tokens.W), "LAN poster exposes operation codes");
+  assert(await admin.locator("#print-seats").isHidden(), "seat sheet visible on LAN poster");
+  await admin.pdf({ path: path.join(root, ".runtime/lan-participant-poster.pdf"), format: "A4" });
+  await admin.emulateMedia({ media: "screen" });
   const playerContext = await browser.newContext({
       viewport: { width: 1280, height: 1000 },
     }),
@@ -172,7 +197,7 @@ async function get(endpoint, token) {
   await admin.locator("#backup").click();
   await admin
     .locator("#notice")
-    .filter({ hasText: "已儲存於伺服器" })
+    .filter({ hasText: "備份已儲存於主機" })
     .waitFor();
   assert(errors.length === 0, "Browser errors: " + errors.join(","));
   console.log(
@@ -192,6 +217,10 @@ async function get(endpoint, token) {
           "referee pause/resume",
           "backup",
           "mobile layout",
+          "LAN private-interface browser access",
+          "participant URL discovery/copy/refresh",
+          "LAN HTTP clipboard fallback",
+          "printed participant URL excludes seat codes",
         ],
         browser_errors: errors.length,
       },

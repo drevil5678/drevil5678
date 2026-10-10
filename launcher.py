@@ -129,9 +129,10 @@ def backup_before_start(directory):
     return destination
 
 
-def browser_when_ready(port, stop):
+def browser_when_ready(port, stop, host="127.0.0.1"):
     import urllib.request
-    url = f"http://127.0.0.1:{port}"
+    from server.lan import admin_url
+    url = admin_url(host, port).split("/#", 1)[0]
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     for _ in range(500):
         if stop.wait(.25):
@@ -140,7 +141,7 @@ def browser_when_ready(port, stop):
             with opener.open(url + "/api/health", timeout=1) as response:
                 if json.load(response).get("ok"):
                     if not stop.is_set():
-                        webbrowser.open(url)
+                        webbrowser.open(url + "/#admin")
                     return
         except (OSError, ValueError):
             continue
@@ -149,7 +150,9 @@ def browser_when_ready(port, stop):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="楊海分站賽 · 現場本地伺服器")
     parser.add_argument("--config", type=Path, default=base_directory()/"tournament.json")
-    parser.add_argument("--host", help="覆寫本次監聽位址，不修改設定檔")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--host", help="覆寫本次監聽位址，不修改設定檔")
+    mode.add_argument("--lan", action="store_true", help="啟動區域網路網頁版，讓選手用瀏覽器加入")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--check", action="store_true", help="真實 AI 啟動診斷，不建立／更動賽事資料庫")
@@ -158,7 +161,7 @@ def main(argv=None):
     listener, stop = None, threading.Event()
     try:
         settings = load_settings(args.config)
-        host = args.host if args.host is not None else settings["host"]
+        host = "0.0.0.0" if args.lan else args.host if args.host is not None else settings["host"]
         port = args.port if args.port is not None else settings["port"]
         if not 1 <= port <= 65535:
             raise ValueError("port 必須是 1–65535")
@@ -201,13 +204,22 @@ def main(argv=None):
             print("賽事資料目錄：", directory)
             print("主辦方管理金鑰檔案：", directory / "admin-token", "（請在本機安全讀取）")
             print(f"監聽位址：{host}，連接埠：{port}。其他電腦請輸入本主機的區域網路 IPv4 及此連接埠。")
+            from server.lan import network_info
+            binding = {"host": listener.getsockname()[0], "port": port}
+            network = network_info(binding["host"], port)
+            print("主辦管理頁：", network["admin_url"])
+            for item in network["interfaces"]:
+                print(f"參賽網址（{item['name']}）：{item['url']}")
+            if network["warning"]:
+                print(network["warning"])
+            print("選手電腦只需瀏覽器。Windows 防火牆請允許活動使用的私人網路；無法連線時檢查是否在同一區網。")
             print("不要關閉本視窗；停止請按 Ctrl+C，服務會保存並暫停棋局。")
             import uvicorn
             from server.app import create_app
-            application = create_app(directory)
+            application = create_app(directory, network=binding)
             config = uvicorn.Config(application, host=host, port=port, workers=1, loop="asyncio", http="h11", ws="none", access_log=False)
             if not args.no_browser and settings["open_browser"]:
-                threading.Thread(target=browser_when_ready, args=(port, stop), daemon=True).start()
+                threading.Thread(target=browser_when_ready, args=(port, stop, binding["host"]), daemon=True).start()
             uvicorn.Server(config).run(sockets=[listener])
             return 0
     except KeyboardInterrupt:

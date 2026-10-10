@@ -62,6 +62,31 @@
           ><button id="logout" type="button" class="secondary">登出</button>
         </form>
         <div id="admin-content" class="hidden">
+          <article id="network-panel" class="panel">
+            <div class="heading">
+              <div><h2>區域網路開賽</h2><p>只在主辦主機執行程式。選手連到相同區網，用瀏覽器輸入以下網址即可。</p></div>
+              <span id="network-mode" class="badge">檢查連線中</span>
+            </div>
+            <p id="network-message" role="status"></p>
+            <label>選擇場地網卡<select id="network-address"></select></label>
+            <label class="lan-url-label">參賽網址<input id="participant-url" type="text" readonly aria-label="參賽網址" /></label>
+            <div class="actions">
+              <button id="copy-participant-url" type="button">複製參賽網址</button>
+              <button id="print-participant-url" type="button" class="secondary">列印參賽網址</button>
+              <button id="network-refresh" type="button" class="secondary">重新檢查</button>
+              <span id="network-ai" class="badge"></span>
+            </div>
+            <details><summary>選手無法連線時，依序檢查</summary>
+              <ol>
+                <li>主辦程式視窗保持開啟，主機連到場地有線網路或 Wi-Fi。</li>
+                <li>選手電腦連到相同區域網路，輸入上方完整網址。</li>
+                <li>Windows 防火牆允許本程式使用私人網路。</li>
+                <li>檢查 Wi-Fi 是否啟用訪客隔離；先用一台選手電腦測試。</li>
+                <li>主機更換網路或 IP 後，按「重新檢查」並重新分享網址；可向場地管理員預留固定 IP。</li>
+              </ol>
+              <p id="network-data"></p>
+            </details>
+          </article>
           <div class="panel">
             <h2>賽事規則</h2>
             <p>
@@ -278,6 +303,7 @@
         </div>
       </section>
       <section id="print-seats" class="hidden"></section>
+      <section id="print-network" class="hidden"></section>
     </main>
     <footer>
       火星人試驗 · 楊海分站賽 <span>2026 / 10 / 17 · 13:00–18:00</span>

@@ -12,8 +12,8 @@ import httpx
 ROOT = Path(__file__).resolve().parent.parent
 
 
-async def run(port, data, team_count, board_size, visits):
-    base = f"http://127.0.0.1:{port}"
+async def run(port, data, team_count, board_size, visits, host="127.0.0.1"):
+    base = f"http://{host}:{port}"
     async with httpx.AsyncClient(base_url=base, timeout=180, limits=httpx.Limits(max_connections=80), trust_env=False) as client:
         for _ in range(120):
             try:

@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from .engine import KataGo
 from .go import IllegalMove, candidates, decode, encode, play, sgf
+from .lan import network_info
 from .store import Store
 from .tournament import awards, pair_swiss, playoff_pairs, standings
 
@@ -63,7 +64,7 @@ class CSVInput(BaseModel):
     csv: str = Field(max_length=50000)
 
 
-def create_app(runtime=None, engine=None):
+def create_app(runtime=None, engine=None, network=None):
     store = Store(runtime or os.getenv("TOURNAMENT_DATA", str(ROOT / ".runtime")))
     state = store.state
     ai = engine or KataGo(store.runtime)
@@ -266,6 +267,16 @@ def create_app(runtime=None, engine=None):
     async def health():
         return {"ok": True, "ai_ready": not ai.failure, "ai_error": ai.failure,
                 "rules_confirmed": state["settings"]["rules_confirmed"], "games": len(state["games"])}
+
+    @app.get("/api/admin/network")
+    async def network_status(request: Request, authorization: str | None = Header(None)):
+        require_admin(authorization)
+        binding = network or {"host": os.getenv("HOST", "127.0.0.1"),
+                              "port": (request.scope.get("server") or (None, 8000))[1]}
+        info = network_info(binding["host"], binding["port"])
+        return {**info, "ai_ready": not ai.failure,
+                "data_dir": str(store.runtime.resolve()),
+                "backup_dir": str((store.runtime/"backups").resolve())}
 
     @app.get("/api/state")
     async def public_state():

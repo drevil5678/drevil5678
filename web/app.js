@@ -21,6 +21,7 @@ let snapshot,
   seatColor,
   receivedAt,
   currentView = "arena";
+let networkState;
 let adminToken = sessionStorage.getItem("adminToken") || "",
   seatToken = "",
   selectedGame = null,
@@ -486,7 +487,77 @@ async function refreshAdmin() {
   $("admin-content").classList.remove("hidden");
   if (wasHidden) loadSettings();
   renderAdmin();
+  try {
+    await refreshNetwork();
+  } catch (error) {
+    $("network-message").textContent = "區網資訊暫時無法取得，請按「重新檢查」。";
+  }
 }
+async function refreshNetwork() {
+  const network = await api("/api/admin/network", { token: adminToken });
+  if (JSON.stringify(networkState) === JSON.stringify(network)) return;
+  networkState = network;
+  const previous = $("network-address").value;
+  $("network-address").replaceChildren();
+  for (const item of network.interfaces) {
+    const option = el("option", `${item.name} · ${item.address}`);
+    option.value = item.url;
+    $("network-address").append(option);
+  }
+  if (network.interfaces.some((item) => item.url === previous))
+    $("network-address").value = previous;
+  $("network-mode").textContent = !network.lan_enabled
+    ? "本機測試模式"
+    : network.interfaces.length ? "區網模式 · 網址已取得" : "等待場地網路";
+  $("network-mode").className = "badge" + (network.warning ? " warn" : "");
+  $("network-message").textContent = network.warning || (network.interfaces.length > 1
+    ? "找到多個網路位址，請選擇與選手相同場地網路的網卡；不要選 VPN。"
+    : "先讓一台選手電腦打開此網址，再讓其他電腦加入。選手不需要安裝程式。");
+  $("network-ai").textContent = network.ai_ready ? "AI 已就緒" : "AI 未就緒，請先排除原因";
+  $("network-ai").className = "badge" + (network.ai_ready ? "" : " warn");
+  $("network-data").textContent = `賽事資料：${network.data_dir}；備份位置：${network.backup_dir}`;
+  updateParticipantUrl();
+}
+function updateParticipantUrl() {
+  const url = $("network-address").value;
+  $("participant-url").value = url;
+  $("copy-participant-url").disabled = !url;
+  $("print-participant-url").disabled = !url;
+}
+$("network-address").onchange = updateParticipantUrl;
+$("network-refresh").onclick = () => safe(async () => {
+  networkState = undefined;
+  await refreshNetwork();
+  notice("區域網路資訊已更新");
+});
+$("copy-participant-url").onclick = () => safe(async () => {
+  const input = $("participant-url");
+  if (!input.value) return;
+  if (window.isSecureContext && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(input.value);
+      notice("參賽網址已複製");
+      return;
+    } catch { /* LAN HTTP or clipboard permission: use local selection below. */ }
+  }
+  input.focus();
+  input.select();
+  let copied = false;
+  try { copied = document.execCommand("copy"); } catch { /* manual copy remains available */ }
+  notice(copied ? "參賽網址已複製" : "網址已選取，請按 Ctrl+C 複製");
+});
+$("print-participant-url").onclick = () => {
+  const url = $("participant-url").value;
+  if (!url) return;
+  $("print-network").replaceChildren(
+    el("h1", "楊海分站賽 · 選手入口"),
+    el("p", "連到場地區域網路，在瀏覽器輸入："),
+    el("p", url, "printed-url"),
+    el("p", "進入自己的對戰桌，再輸入主辦方發給你的操作碼。選手電腦不需安裝任何比賽程式。"),
+  );
+  document.body.dataset.printMode = "lan";
+  window.print();
+};
 function loadSettings() {
   if (!adminState) return;
   const f = $("settings-form");
@@ -669,7 +740,7 @@ $("backup").onclick = () =>
       method: "POST",
       token: adminToken,
     });
-    notice("已儲存於伺服器 .runtime/backups/" + result.filename);
+    notice("備份已儲存於主機資料目錄的 backups 資料夾：" + result.filename);
   });
 $("export").onclick = () =>
   safe(async () => {
@@ -704,6 +775,7 @@ $("seats").onclick = () =>
         );
         $("print-seats").append(slip);
       }
+    document.body.dataset.printMode = "seats";
     window.print();
   });
 // Atomic roster import: import in original registration order, then check in each

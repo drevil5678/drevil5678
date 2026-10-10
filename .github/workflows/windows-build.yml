@@ -32,16 +32,19 @@ jobs:
         run: .\.venv\Scripts\python.exe -m pytest -q
       - name: Build Windows portable package
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-x64-v0.1.0
+        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-lan-v0.2.0
       - name: Check bundled KataGo using real analysis
         shell: pwsh
-        run: .\dist\yanghai-windows-x64-v0.1.0\YanghaiTournament.exe --check --no-pause
+        run: .\dist\yanghai-windows-lan-v0.2.0\YanghaiTournament.exe --check --no-pause
+      - name: Check LAN package with real AI and 50 clients
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe scripts\lan_smoke.py --executable dist\yanghai-windows-lan-v0.2.0\YanghaiTournament.exe
       - name: Provide downloadable ZIP and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: yanghai-windows-x64-v0.1.0
+          name: yanghai-windows-lan-v0.2.0
           path: |
-            dist/yanghai-windows-x64-v0.1.0.zip
-            dist/yanghai-windows-x64-v0.1.0.zip.sha256
+            dist/yanghai-windows-lan-v0.2.0.zip
+            dist/yanghai-windows-lan-v0.2.0.zip.sha256
           if-no-files-found: error
           retention-days: 14
