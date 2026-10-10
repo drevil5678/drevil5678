@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>楊海分站賽 · 火星人試驗</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="#arena"
+        ><span class="mark">火</span
+        ><span>火星人試驗<small>第七屆 · 楊海分站賽</small></span></a
+      >
+      <nav>
+        <button data-view="arena" class="active">賽場</button
+        ><button data-view="standings">積分榜</button
+        ><button data-view="admin">主辦管理</button
+        ><button data-view="guide">使用說明</button>
+      </nav>
+      <span id="connection" class="badge">連線中</span>
+    </header>
+    <main>
+      <div id="notice" role="status" aria-live="polite"></div>
+      <section id="arena" class="view">
+        <div class="heading">
+          <div>
+            <p class="eyebrow">YANGHAI OPEN / 2026.10.17</p>
+            <h1>每一步，由你決定。</h1>
+            <p>參考 AI 提示，選擇首選以外的棋著。</p>
+          </div>
+          <div id="round-label" class="round-label">等待主辦方開賽</div>
+        </div>
+        <div id="rules-summary" class="rule-strip"></div>
+        <div id="games" class="grid"></div>
+        <div id="empty" class="empty">
+          <span class="empty-stone">● ○</span>
+          <h2>賽場準備中</h2>
+          <p>主辦方完成檢錄並建立首輪後，對戰桌將顯示於此。</p>
+        </div>
+      </section>
+      <section id="standings" class="view hidden">
+        <p class="eyebrow">TOURNAMENT STANDINGS</p>
+        <h1>瑞士制積分榜</h1>
+        <p>排序：積分 → 對手積分總和 → 報名順序。</p>
+        <div id="ranking"></div>
+        <div id="awards"></div>
+      </section>
+      <section id="admin" class="view hidden">
+        <p class="eyebrow">TOURNAMENT DESK</p>
+        <h1>主辦與裁判管理</h1>
+        <form id="login" class="panel inline">
+          <label
+            >管理金鑰<input
+              id="admin-token"
+              type="password"
+              autocomplete="off"
+              placeholder="由伺服器管理員提供"
+              required /></label
+          ><button type="submit">登入</button
+          ><button id="logout" type="button" class="secondary">登出</button>
+        </form>
+        <div id="admin-content" class="hidden">
+          <div class="panel">
+            <h2>賽事規則</h2>
+            <p>
+              主辦方指定判負門檻為
+              40.00%。首輪建立後規則鎖定。開賽前請公告貼目、停一手與裁判終局方式。
+            </p>
+            <form id="settings-form" class="form-grid">
+              <label
+                >棋盤<select name="board_size">
+                  <option value="19">19 路</option>
+                  <option value="13">13 路</option>
+                  <option value="9">9 路</option>
+                </select></label
+              ><label
+                >黑棋貼目<input
+                  name="komi"
+                  type="number"
+                  step="0.5"
+                  value="7.5"
+                  required /></label
+              ><label
+                >計分規則<select name="rules">
+                  <option value="chinese">中國規則（位置超劫）</option>
+                  <option value="japanese">日本規則（立即回劫）</option>
+                </select></label
+              ><label
+                >判負勝率（%）<input
+                  name="threshold"
+                  type="number"
+                  value="40"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  required /></label
+              ><label
+                >每次分析 visits<input
+                  name="visits"
+                  type="number"
+                  value="128"
+                  min="16"
+                  max="100000"
+                  required /></label
+              ><label class="check"
+                ><input
+                  name="allow_pass"
+                  type="checkbox"
+                  checked
+                />允許停一手</label
+              ><label class="check span"
+                ><input
+                  name="rules_confirmed"
+                  type="checkbox"
+                />已確認並公告規則；已評估模型、分析預算與場地效能，允許建立比賽</label
+              ><button type="submit">儲存規則</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h2>報名與檢錄 <span id="team-count" class="badge"></span></h2>
+            <p>
+              每隊兩人，第一位視為隊長。隊員更換會將報名順位移到最後。檢錄前請檢查參賽資格證明。
+            </p>
+            <form id="team-form" class="form-grid">
+              <input name="id" type="hidden" /><label
+                >隊名<input name="name" maxlength="60" required /></label
+              ><label
+                >隊長<input name="player1" maxlength="80" required /></label
+              ><label
+                >隊員<input name="player2" maxlength="80" required /></label
+              ><label
+                >隊長原有火星積分<input
+                  name="points1"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="0"
+                  required /></label
+              ><label
+                >隊員原有火星積分<input
+                  name="points2"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="0"
+                  required /></label
+              ><label class="check"
+                ><input
+                  name="eligibility_checked"
+                  type="checkbox"
+                />已確認资格證明</label
+              ><label class="check"
+                ><input name="checked_in" type="checkbox" />已檢錄</label
+              ><button type="submit">儲存隊伍</button
+              ><button id="team-clear" type="button" class="secondary">
+                清空表單
+              </button>
+            </form>
+            <div id="roster"></div>
+          </div>
+          <div class="panel">
+            <h2>賽程與備份</h2>
+            <div class="actions">
+              <button id="swiss">建立下一輪瑞士賽</button
+              ><button id="playoff">建立下一輪淘汰賽</button
+              ><button id="backup" class="secondary">備份資料庫</button
+              ><button id="export" class="secondary">下載賽務與裁判紀錄</button
+              ><button id="seats" class="secondary">列印本輪操作碼</button>
+            </div>
+            <p>
+              瑞士制共六輪；本輪全部完成後才能建立下一輪。現版本不自動處理輪空。操作碼只交給指定點棋手。
+            </p>
+          </div>
+          <div id="referee-games" class="grid"></div>
+          <div class="panel">
+            <h2>近期裁判紀錄</h2>
+            <div id="audit"></div>
+          </div>
+        </div>
+      </section>
+      <section id="guide" class="view hidden">
+        <p class="eyebrow">EVENT OPERATIONS</p>
+        <h1>上場前，先確認。</h1>
+        <div class="grid">
+          <article class="panel">
+            <h2>選手</h2>
+            <ol>
+              <li>找到自己的對戰桌，輸入主辦方發給點棋手的操作碼。</li>
+              <li>
+                開賽前決定是否參考自備設備。使用者僅有 5 分鐘，其他為 10 分鐘。
+              </li>
+              <li>
+                紅色叉號是 AI 最高勝率落點，禁止落子；綠色數字是其他 AI
+                建議。也可選擇未標記的合法落點。
+              </li>
+              <li>
+                點選棋盤後，按「確認落子」。關閉或重新整理瀏覽器不會停止計時。
+              </li>
+              <li>
+                分析等待不扣選手時間；伺服器收到合法落子後切換對方並分析。
+              </li>
+              <li>
+                从第 61 手開始，最佳合法可選點勝率連續三個自身回合 ≤ 40.00%
+                判負。介面顯示四位小數供核對，判定使用原始值。
+              </li>
+            </ol>
+          </article>
+          <article class="panel">
+            <h2>裁判與主辦方</h2>
+            <ol>
+              <li>先確認規則、模型與現場效能，再檢錄隊伍並建立首輪。</li>
+              <li>每桌開賽前檢查雙方自備設備選項，個別按「開賽」。</li>
+              <li>因主辦方系統或網路異常，可填寫原因並暫停、恢復或重賽。</li>
+              <li>雙方停一手會暫停，需由裁判依公告規則裁定勝隊及積分。</li>
+              <li>
+                用時耗盡勝方得 1 分；連續低勝率判負勝方得 1.25 分；敗方 0 分。
+              </li>
+              <li>每輪備份資料庫並匯出紀錄。若伺服器重啟，逐桌確認後恢復。</li>
+            </ol>
+          </article>
+          <article class="panel">
+            <h2>50 台電腦的配置</h2>
+            <p>
+              32
+              台供各隊指定點棋手；其餘可供隊員共同討論、裁判、排行榜、備用席。最多
+              16 場同時對弈。所有電腦以瀏覽器連到同一台區域網路伺服器，AI
+              不需要安裝在每台選手電腦。
+            </p>
+            <p>
+              正式活動需另確認 GPU 主機、有線網路、電源與斷線處置。目前附帶 CPU
+              小模型供開發驗證，尚未證明現場效能。
+            </p>
+          </article>
+        </div>
+      </section>
+      <section id="match" class="view hidden">
+        <button id="back" class="secondary">← 返回賽場</button>
+        <div id="match-title" class="heading"></div>
+        <div class="match-layout">
+          <div class="board-wrap">
+            <canvas
+              id="board"
+              width="740"
+              height="740"
+              aria-label="圍棋棋盤"
+            ></canvas>
+          </div>
+          <aside>
+            <div id="clocks" class="clocks"></div>
+            <div class="panel">
+              <div id="match-status"></div>
+              <p id="selection">請選擇落點</p>
+              <button id="submit-move" disabled>確認落子</button
+              ><button id="pass" class="secondary">停一手</button>
+              <div id="hints"></div>
+            </div>
+            <form id="seat-form" class="panel">
+              <label
+                >點棋手操作碼<input
+                  id="seat-token"
+                  type="password"
+                  autocomplete="off"
+                  placeholder="觀戰不需操作碼"
+                  required /></label
+              ><button type="submit">進入操作席</button>
+              <p id="seat-status">目前為觀戰模式</p>
+              <label class="check"
+                ><input id="own-device" type="checkbox" />本場參考自備設備（5
+                分鐘）</label
+              ><button id="save-device" type="button" class="secondary">
+                確認設備選項
+              </button>
+            </form>
+            <a id="sgf" class="download" href="#">下載本局棋譜 SGF</a>
+          </aside>
+        </div>
+      </section>
+      <section id="print-seats" class="hidden"></section>
+    </main>
+    <footer>
+      火星人試驗 · 楊海分站賽 <span>2026 / 10 / 17 · 13:00–18:00</span>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+.venv/
+.runtime/
+__pycache__/
+.pytest_cache/
+.env
+*.sqlite3*
+build/
+dist/
+*.spec
+tournament.json
+data/

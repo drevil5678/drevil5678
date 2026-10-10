@@ -1,0 +1,14 @@
+[project]
+name = "yanghai-tournament"
+version = "0.1.0"
+description = "楊海分站賽：圍棋、KataGo 與賽務管理"
+requires-python = ">=3.12,<3.14"
+dependencies = ["fastapi==0.141.1", "uvicorn==0.52.1"]
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "httpx==0.28.1"]
+build = ["pyinstaller==6.16.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
