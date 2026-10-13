@@ -3,6 +3,7 @@ import os
 import secrets
 import sqlite3
 from pathlib import Path
+from .credentials import new_team_code
 
 
 DEFAULT_SETTINGS = {"board_size": 19, "komi": 7.5, "rules": "chinese", "threshold": 0.40,
@@ -31,6 +32,12 @@ class Store:
         self.state = json.loads(row[0]) if row else {
             "settings": DEFAULT_SETTINGS.copy(), "teams": [], "games": [], "rounds": [], "events": []}
         self.pending_events = []
+        # Preserve old per-game tokens, while adding a stable code to each team.
+        used = [t["play_code"] for t in self.state["teams"] if t.get("play_code")]
+        for team in self.state["teams"]:
+            if not team.get("play_code"):
+                team["play_code"] = new_team_code(used)
+                used.append(team["play_code"])
         # Migrate older snapshots once, preserving the complete audit trail.
         if self.state["events"] and self.db.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0:
             self.pending_events.extend(self.state["events"])

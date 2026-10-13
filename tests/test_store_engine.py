@@ -35,3 +35,25 @@ def test_engine_refuses_reversed_winrate_perspective(tmp_path, monkeypatch):
     asyncio.run(engine.start())
     assert engine.process is None
     assert "SIDETOMOVE" in engine.failure
+
+
+def test_analysis_wire_includes_actual_komi_rules_and_position(tmp_path):
+    import json
+    from types import SimpleNamespace
+    async def check():
+        engine = KataGo(tmp_path)
+        captured = []
+        class Sink:
+            def write(self, data):
+                query = json.loads(data)
+                captured.append(query)
+                engine.pending[query["id"]].set_result({"moveInfos": [{"move": "D4", "winrate": .5, "visits": 10}]})
+            async def drain(self):
+                pass
+        engine.process = SimpleNamespace(returncode=None, stdin=Sink())
+        moves = [["B", "D4"], ["W", "Q16"]]
+        for komi in (7.5, 6.5):
+            await engine.analyze(moves, {"board_size": 19, "komi": komi, "rules": "chinese", "visits": 128})
+        assert [q["komi"] for q in captured] == [7.5, 6.5]
+        assert all(q["moves"] == moves and q["rules"] == "chinese-ogs" and q["boardXSize"] == 19 for q in captured)
+    asyncio.run(check())

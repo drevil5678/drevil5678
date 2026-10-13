@@ -129,7 +129,7 @@ def backup_before_start(directory):
     return destination
 
 
-def browser_when_ready(port, stop, host="127.0.0.1"):
+def browser_when_ready(port, stop, host="127.0.0.1", view="admin"):
     import urllib.request
     from server.lan import admin_url
     url = admin_url(host, port).split("/#", 1)[0]
@@ -141,7 +141,7 @@ def browser_when_ready(port, stop, host="127.0.0.1"):
             with opener.open(url + "/api/health", timeout=1) as response:
                 if json.load(response).get("ok"):
                     if not stop.is_set():
-                        webbrowser.open(url + "/#admin")
+                        webbrowser.open(url + ("/#admin" if view == "admin" else "/"))
                     return
         except (OSError, ValueError):
             continue
@@ -153,6 +153,7 @@ def main(argv=None):
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--host", help="覆寫本次監聽位址，不修改設定檔")
     mode.add_argument("--lan", action="store_true", help="啟動區域網路網頁版，讓選手用瀏覽器加入")
+    mode.add_argument("--practice", action="store_true", help="離線單機雙人練習，使用獨立資料與本機連線")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--check", action="store_true", help="真實 AI 啟動診斷，不建立／更動賽事資料庫")
@@ -161,8 +162,8 @@ def main(argv=None):
     listener, stop = None, threading.Event()
     try:
         settings = load_settings(args.config)
-        host = "0.0.0.0" if args.lan else args.host if args.host is not None else settings["host"]
-        port = args.port if args.port is not None else settings["port"]
+        host = "127.0.0.1" if args.practice else "0.0.0.0" if args.lan else args.host if args.host is not None else settings["host"]
+        port = args.port if args.port is not None else 8001 if args.practice else settings["port"]
         if not 1 <= port <= 65535:
             raise ValueError("port 必須是 1–65535")
         os.environ["TOURNAMENT_DATA"] = settings["data_dir"]
@@ -171,6 +172,10 @@ def main(argv=None):
             os.environ.setdefault(key, str(settings[field]))
         os.environ["AUTO_BACKUP_SECONDS"] = str(settings["auto_backup_seconds"])
         directory = Path(settings["data_dir"])
+        if args.practice:
+            practice_directory = directory.parent/"practice-data"
+            directory = practice_directory if practice_directory != directory else directory.parent/"practice-only"
+            os.environ["TOURNAMENT_DATA"] = str(directory)
         with InstanceLock(directory):
             if args.check:
                 from server.engine import KataGo
@@ -197,29 +202,35 @@ def main(argv=None):
                 listener.listen(128)
             except OSError:
                 raise RuntimeError(f"無法監聽 {host}:{port}，可能已有程式使用此連接埠；不會停止其他程式。") from None
-            backup = backup_before_start(directory)
+            backup = None if args.practice else backup_before_start(directory)
             if backup:
                 print("已建立啟動前備份：", backup)
-            print("楊海分站賽本地伺服器 · 比賽不依賴外部網路")
+            print("雙人離線單機練習 · 不計正式賽積分" if args.practice else "楊海分站賽本地伺服器 · 比賽不依賴外部網路")
             print("賽事資料目錄：", directory)
-            print("主辦方管理金鑰檔案：", directory / "admin-token", "（請在本機安全讀取）")
-            print(f"監聽位址：{host}，連接埠：{port}。其他電腦請輸入本主機的區域網路 IPv4 及此連接埠。")
+            if not args.practice:
+                print("主辦方管理金鑰檔案：", directory / "admin-token", "（請在本機安全讀取）")
+            print(f"本機練習連接埠：{port}，只允許此台電腦連線。" if args.practice else f"監聽位址：{host}，連接埠：{port}。其他電腦請輸入本主機的區域網路 IPv4 及此連接埠。")
             from server.lan import network_info
             binding = {"host": listener.getsockname()[0], "port": port}
             network = network_info(binding["host"], port)
-            print("主辦管理頁：", network["admin_url"])
+            print("雙人練習頁：" if args.practice else "主辦管理頁：", network["admin_url"].replace("/#admin", "/") if args.practice else network["admin_url"])
             for item in network["interfaces"]:
                 print(f"參賽網址（{item['name']}）：{item['url']}")
-            if network["warning"]:
+            if network["warning"] and not args.practice:
                 print(network["warning"])
-            print("選手電腦只需瀏覽器。Windows 防火牆請允許活動使用的私人網路；無法連線時檢查是否在同一區網。")
-            print("不要關閉本視窗；停止請按 Ctrl+C，服務會保存並暫停棋局。")
+            if not args.practice:
+                print("選手電腦只需瀏覽器。Windows 防火牆請允許活動使用的私人網路；無法連線時檢查是否在同一區網。")
+            print("練習棋局請先下載 SGF 保存；停止請按 Ctrl+C。" if args.practice else "不要關閉本視窗；停止請按 Ctrl+C，服務會保存並暫停棋局。")
             import uvicorn
             from server.app import create_app
-            application = create_app(directory, network=binding)
+            if args.practice:
+                from server.practice import create_practice_app
+                application = create_practice_app(directory)
+            else:
+                application = create_app(directory, network=binding)
             config = uvicorn.Config(application, host=host, port=port, workers=1, loop="asyncio", http="h11", ws="none", access_log=False)
             if not args.no_browser and settings["open_browser"]:
-                threading.Thread(target=browser_when_ready, args=(port, stop, binding["host"]), daemon=True).start()
+                threading.Thread(target=browser_when_ready, args=(port, stop, binding["host"], "practice" if args.practice else "admin"), daemon=True).start()
             uvicorn.Server(config).run(sockets=[listener])
             return 0
     except KeyboardInterrupt:

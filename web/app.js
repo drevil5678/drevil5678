@@ -22,6 +22,7 @@ let snapshot,
   receivedAt,
   currentView = "arena";
 let networkState;
+let selectedRecordTeam = sessionStorage.getItem("teamId") || null;
 let adminToken = sessionStorage.getItem("adminToken") || "",
   seatToken = "",
   selectedGame = null,
@@ -89,6 +90,7 @@ function showView(view) {
     location.hash = view;
   }
   if (view === "admin" && adminToken) safe(refreshAdmin);
+  if (view === "records") safe(refreshRecords);
 }
 document
   .querySelectorAll("nav button")
@@ -125,6 +127,7 @@ function timeText(seconds) {
 }
 function renderArena() {
   const s = snapshot.settings;
+  $("guide-settings").textContent = `本場 ${s.board_size} 路 · 黑貼 ${s.komi} 目 · ${s.rules === "chinese" ? "中國" : "日本"}規則。勝率已計入此貼目；從第 ${s.loss_start_ply} 手起，連續 ${s.loss_turns} 個自身回合 ≤ ${(s.threshold * 100).toFixed(2)}% 判負。${s.allow_pass ? "允許停一手，雙方停一手後由裁判處理。" : "本場不允許停一手。"}`;
   $("rules-summary").replaceChildren(
     ...[
       `${s.board_size} 路 · 黑貼 ${s.komi} 目`,
@@ -160,7 +163,7 @@ function renderArena() {
       ["順位", "隊伍", "積分", "對手分總和", "報名序"],
       snapshot.standings.map((t) => [
         t.rank,
-        t.name,
+        button(t.name, () => openTeam(t.id), "secondary team-link"),
         t.score,
         t.buchholz,
         t.order,
@@ -168,6 +171,7 @@ function renderArena() {
     ),
   );
   $("awards").replaceChildren();
+  renderRecordSelector();
   if (snapshot.awards.length) {
     $("awards").append(
       el("h2", "獎勵與出場費"),
@@ -185,6 +189,55 @@ function renderArena() {
     );
   }
 }
+function renderRecordSelector() {
+  const select = $("record-team"), teams = snapshot.teams || [];
+  if (!teams.some(t => t.id === selectedRecordTeam)) selectedRecordTeam = teams[0]?.id || null;
+  select.replaceChildren();
+  if (!teams.length) select.append(el("option", "尚無報名隊伍"));
+  for (const team of teams) { const option = el("option", team.name); option.value = team.id; select.append(option); }
+  if (selectedRecordTeam) select.value = selectedRecordTeam;
+}
+async function openTeam(ident) {
+  selectedRecordTeam = ident;
+  showView("records");
+  $("record-team").value = ident;
+  location.hash = "team/" + ident;
+  await refreshRecords();
+}
+$("record-team").onchange = () => safe(() => openTeam($("record-team").value));
+$("team-entry").onsubmit = event => {
+  event.preventDefault();
+  safe(async () => {
+    const code = $("team-code").value.trim(), team = await api("/api/team/identify", { token: code });
+    sessionStorage.setItem("teamCode", code);
+    sessionStorage.setItem("teamId", team.id);
+    $("team-code").value = "";
+    await openTeam(team.id);
+    notice("已辨識本隊；進入本隊對戰桌時會自動使用隊伍點棋碼");
+  });
+};
+async function refreshRecords() {
+  if (!snapshot) return;
+  renderRecordSelector();
+  const target = $("team-records"), ident = selectedRecordTeam;
+  if (!ident) { target.replaceChildren(el("p", "主辦方建立隊伍後，會顯示對戰紀錄。")); return; }
+  const data = await api(`/api/teams/${ident}/history`);
+  if (ident !== selectedRecordTeam) return;
+  target.replaceChildren(el("h2", data.team.name));
+  if (data.standing) target.append(el("p", `目前第 ${data.standing.rank} 名 · ${data.standing.score} 分 · 對手分總和 ${data.standing.buchholz}`));
+  target.append(el("p", data.next.message, "record-next"));
+  for (const [title, rows] of [["當前對戰", data.current], ["已排定的下一場", data.upcoming], ["歷史對戰", data.history]]) {
+    const panel = el("article", undefined, "panel"); panel.append(el("h2", title));
+    if (!rows.length) panel.append(el("p", title === "歷史對戰" ? "尚無已完成的對戰。" : "目前沒有已排定的對戰。"));
+    else panel.append(table(["賽程", "桌次", "本隊棋色", "對手", "狀態／結果", "積分", "棋局"], rows.map(g => {
+      const outcome = g.outcome ? `${g.outcome === "win" ? "勝" : "負"} · ${g.reason === "threshold" ? "連續低勝率" : g.reason === "timeout" ? "時間耗盡" : "裁判裁定"}` : labels[g.status];
+      const links = el("div"); links.append(button("查看棋局", () => openGame(g.id), "secondary"));
+      if (g.status === "finished") { const a = el("a", "SGF"); a.href = `/api/games/${g.id}/sgf`; a.className = "download"; links.append(a); }
+      return [`${stages[g.stage]} · 第 ${g.round} 輪`, g.table, g.color === "B" ? "黑" : "白", button(g.opponent, () => openTeam(g.opponent_id), "secondary"), outcome, g.outcome ? g.points : "—", links];
+    })));
+    target.append(panel);
+  }
+}
 async function openGame(id) {
   selectedGame = id;
   seatColor = null;
@@ -198,6 +251,9 @@ async function openGame(id) {
     .forEach((s) => s.classList.toggle("hidden", s.id !== "match"));
   location.hash = "game/" + id;
   await refreshGame();
+  const teamId = sessionStorage.getItem("teamId"), code = sessionStorage.getItem("teamCode");
+  if (code && Object.values(currentGame.seats).some(s => s.team === teamId)) seatToken = code;
+  $("seat-token").value = seatToken;
   if (seatToken) await joinSeat();
 }
 async function refreshGame() {
@@ -446,6 +502,11 @@ $("back").onclick = () => showView("arena");
 async function joinSeat() {
   const s = await api(`/api/games/${selectedGame}/seat`, { token: seatToken });
   seatColor = s.color;
+  if (s.credential === "team") {
+    sessionStorage.setItem("teamCode", seatToken);
+    sessionStorage.setItem("teamId", s.team);
+    selectedRecordTeam = s.team;
+  }
   sessionStorage.setItem("seat:" + selectedGame, seatToken);
   renderMatch();
 }
@@ -635,7 +696,7 @@ function renderAdmin() {
     `${s.teams.length}/32 隊 · ${s.teams.filter((t) => t.checked_in).length} 隊已檢錄`;
   $("roster").replaceChildren(
     table(
-      ["序", "隊伍", "隊長／隊員", "檢錄", "操作"],
+      ["序", "隊伍", "隊長／隊員", "檢錄", "操作", "點棋碼"],
       s.teams
         .slice()
         .sort((a, b) => a.order - b.order)
@@ -645,6 +706,7 @@ function renderAdmin() {
           t.players.join(" / "),
           t.checked_in ? "已檢錄" : "未檢錄",
           button("編輯", () => editTeam(t), "secondary"),
+          teamCodeActions(t),
         ]),
     ),
   );
@@ -689,6 +751,17 @@ function renderAdmin() {
         ),
       ),
   );
+}
+function teamCodeActions(team) {
+  const actions = el("div", undefined, "actions");
+  actions.append(button("查看點棋碼", () => { prompt(`${team.name}：本隊固定點棋碼（整場沿用）`, team.play_code); }, "secondary"));
+  actions.append(button("重新制發", async () => {
+    const reason = prompt("重新制發會使本隊舊點棋碼失效，請填寫原因：");
+    if (!reason?.trim()) return;
+    await api(`/api/admin/teams/${team.id}/code`, { method: "POST", token: adminToken, body: { reason } });
+    await refreshAdmin(); notice("已重新制發點棋碼，請將新碼交給該隊指定點棋手");
+  }, "secondary"));
+  return actions;
 }
 async function referee(g, action) {
   let reason = "",
@@ -778,6 +851,17 @@ $("seats").onclick = () =>
     document.body.dataset.printMode = "seats";
     window.print();
   });
+$("team-codes").onclick = () => safe(async () => {
+  await refreshAdmin();
+  if (!adminState.teams.length) throw Error("請先建立隊伍，即可賽前制發點棋碼");
+  $("print-seats").replaceChildren(el("h1", "楊海分站賽 · 隊伍固定點棋碼"));
+  for (const team of adminState.teams.slice().sort((a, b) => a.order-b.order)) {
+    const card = el("article", undefined, "seat-slip");
+    card.append(el("h2", team.name), el("code", team.play_code), el("p", "整場沿用此碼。每輪進入本隊對戰桌輸入，系統會辨識棋色；只交給本隊指定點棋手。"));
+    $("print-seats").append(card);
+  }
+  document.body.dataset.printMode = "seats"; window.print();
+});
 // Atomic roster import: import in original registration order, then check in each
 // team after the referee has inspected eligibility documents.
 const importPanel = el("article", undefined, "panel"),
@@ -839,6 +923,7 @@ async function poll() {
     snapshot = await api("/api/state");
     renderArena();
     if (selectedGame) await refreshGame();
+    if (currentView === "records") await refreshRecords();
     if (currentView === "admin" && adminToken && pollCount % 5 === 0)
       await refreshAdmin();
     if (pollCount % 10 === 0) {
@@ -860,7 +945,8 @@ safe(async () => {
   await poll();
   const hash = location.hash.slice(1);
   if (hash.startsWith("game/")) await openGame(hash.slice(5));
-  else if (["arena", "standings", "admin", "guide"].includes(hash))
+  else if (hash.startsWith("team/")) await openTeam(hash.slice(5));
+  else if (["arena", "standings", "records", "admin", "guide"].includes(hash))
     showView(hash);
 });
 setInterval(poll, 1000);

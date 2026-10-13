@@ -18,10 +18,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .engine import KataGo
+from .credentials import matches, matches_team_code, new_team_code
 from .go import IllegalMove, candidates, decode, encode, play, sgf
 from .lan import network_info
 from .store import Store
 from .tournament import awards, pair_swiss, playoff_pairs, standings
+from .records import team_records
 
 ROOT = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 
@@ -64,6 +66,10 @@ class CSVInput(BaseModel):
     csv: str = Field(max_length=50000)
 
 
+class CodeReset(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
 def create_app(runtime=None, engine=None, network=None):
     store = Store(runtime or os.getenv("TOURNAMENT_DATA", str(ROOT / ".runtime")))
     state = store.state
@@ -83,13 +89,14 @@ def create_app(runtime=None, engine=None, network=None):
 
     def require_admin(authorization):
         supplied = (authorization or "").removeprefix("Bearer ")
-        if not secrets.compare_digest(supplied, store.admin_token):
+        if not matches(store.admin_token, supplied):
             raise HTTPException(401, "請輸入主辦方管理金鑰")
 
     def seat(game, authorization):
         supplied = (authorization or "").removeprefix("Bearer ")
         for color, info in game["seats"].items():
-            if secrets.compare_digest(supplied, info["token"]):
+            team = next(t for t in state["teams"] if t["id"] == info["team"])
+            if matches(info["token"], supplied) or matches_team_code(team["play_code"], supplied):
                 return color
         raise HTTPException(403, "操作碼不屬於本場比賽")
 
@@ -245,7 +252,7 @@ def create_app(runtime=None, engine=None, network=None):
         await ai.close()
         store.db.close()
 
-    app = FastAPI(title="楊海分站賽", lifespan=lifespan)
+    app = FastAPI(title="楊海分站賽", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.ai = store, ai
 
     @app.middleware("http")
@@ -282,6 +289,7 @@ def create_app(runtime=None, engine=None, network=None):
     async def public_state():
         async with lock:
             return {"settings": state["settings"], "rounds": state["rounds"],
+                    "teams": [{"id": t["id"], "name": t["name"], "order": t["order"]} for t in state["teams"]],
                     "standings": [{k: t[k] for k in ("id", "name", "score", "buchholz", "rank", "order")} for t in standings(state)],
                     "games": [public_game(g) for g in state["games"] if state["rounds"] and g["round_id"] == state["rounds"][-1]["id"]], "awards": awards(state)}
 
@@ -290,8 +298,44 @@ def create_app(runtime=None, engine=None, network=None):
         require_admin(authorization)
         async with lock:
             result = copy.deepcopy(state)
-            result["games"] = [{**public_game(g), "seat_tokens": {c: s["token"] for c, s in g["seats"].items()}} for g in state["games"]]
+            codes = {t["id"]: t["play_code"] for t in state["teams"]}
+            result["games"] = [{**public_game(g), "seat_tokens": {c: codes[s["team"]] for c, s in g["seats"].items()}} for g in state["games"]]
             return result
+
+    @app.get("/api/teams/{ident}/history")
+    async def history(ident: str):
+        async with lock:
+            try:
+                return team_records(state, ident)
+            except KeyError:
+                raise HTTPException(404, "找不到隊伍") from None
+
+    @app.get("/api/team/identify")
+    async def identify(authorization: str | None = Header(None)):
+        supplied = (authorization or "").removeprefix("Bearer ")
+        async with lock:
+            team = next((t for t in state["teams"] if matches_team_code(t["play_code"], supplied)), None)
+            if team is None:
+                raise HTTPException(403, "隊伍點棋碼不正確")
+            return {"id": team["id"], "name": team["name"]}
+
+    @app.post("/api/admin/teams/{ident}/code")
+    async def reset_code(ident: str, body: CodeReset, authorization: str | None = Header(None)):
+        require_admin(authorization)
+        if not body.reason.strip():
+            raise HTTPException(400, "請填寫重新制發原因")
+        async with lock:
+            team = next((t for t in state["teams"] if t["id"] == ident), None)
+            if team is None:
+                raise HTTPException(404, "找不到隊伍")
+            team["play_code"] = new_team_code(t["play_code"] for t in state["teams"])
+            for game in state["games"]:
+                for info in game["seats"].values():
+                    if info["team"] == ident:
+                        info["token"] = secrets.token_urlsafe(18)
+            event("team_code_reset", {"team": ident, "reason": body.reason})
+            store.save()
+            return {"id": ident, "play_code": team["play_code"]}
 
     @app.post("/api/admin/settings")
     async def settings(body: SettingsInput, authorization: str | None = Header(None)):
@@ -326,6 +370,7 @@ def create_app(runtime=None, engine=None, network=None):
             if any(t["name"] == body.name.strip() for t in state["teams"]):
                 raise HTTPException(409, "隊名重複")
             team = {**body.model_dump(), "name": body.name.strip(), "id": uuid.uuid4().hex[:12],
+                    "play_code": new_team_code(t["play_code"] for t in state["teams"]),
                     "order": max((t["order"] for t in state["teams"]), default=0)+1}
             state["teams"].append(team)
             event("team_add", {"id": team["id"], "order": team["order"]})
@@ -376,7 +421,8 @@ def create_app(runtime=None, engine=None, network=None):
             order = max((t["order"] for t in state["teams"]), default=0)
             for i, t in enumerate(parsed, 1):
                 state["teams"].append({**t.model_dump(), "name": t.name.strip(),
-                                      "id": uuid.uuid4().hex[:12], "order": order+i})
+                                      "id": uuid.uuid4().hex[:12], "order": order+i,
+                                      "play_code": new_team_code(t["play_code"] for t in state["teams"])})
             event("team_import", {"count": len(parsed)})
             store.save()
             return {"imported": len(parsed)}
@@ -433,7 +479,9 @@ def create_app(runtime=None, engine=None, network=None):
         async with lock:
             g = game_by_id(ident)
             color = seat(g, authorization)
-            return {"color": color, "team": g["seats"][color]["team"]}
+            team = next(t for t in state["teams"] if t["id"] == g["seats"][color]["team"])
+            supplied = (authorization or "").removeprefix("Bearer ")
+            return {"color": color, "team": team["id"], "credential": "team" if matches_team_code(team["play_code"], supplied) else "legacy"}
 
     @app.post("/api/games/{ident}/device")
     async def choose_device(ident: str, body: DeviceInput, authorization: str | None = Header(None)):
@@ -555,10 +603,14 @@ def create_app(runtime=None, engine=None, network=None):
         async with lock:
             result = copy.deepcopy(state)
             result["events"] = store.all_events()
+            for t in result["teams"]:
+                t.pop("play_code", None)
             for g in result["games"]:
                 for s in g["seats"].values():
                     s.pop("token", None)
             result["standings"], result["awards"] = standings(state), awards(state)
+            for t in result["standings"]:
+                t.pop("play_code", None)
             return Response(json.dumps(result, ensure_ascii=False, indent=2), media_type="application/json",
                             headers={"Content-Disposition": 'attachment; filename="tournament-export.json"'})
 

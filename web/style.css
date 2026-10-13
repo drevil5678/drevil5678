@@ -381,6 +381,15 @@ canvas {
   font-weight: bold;
   overflow-wrap: anywhere;
 }
+.record-next {
+  padding: 14px 18px;
+  background: #e8eee6;
+  border-radius: 8px;
+  color: var(--green);
+}
+.team-link { padding: 4px 10px; }
+#team-records table { min-width: 720px; }
+#practice-notice { color: var(--red); margin-bottom: 18px; }
 .seat-slip code {
   display: block;
   font-size: 17px;

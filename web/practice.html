@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>雙人單機練習 · 楊海分站賽</title><link rel="stylesheet" href="/static/style.css"><script defer src="/static/practice.js"></script></head>
+<body>
+<header><span class="brand"><span class="mark">火</span><span>雙人單機練習<small>兩人共用這台電腦，輪流落子</small></span></span><span class="badge">離線 · 無計時 · 不計正式成績</span></header>
+<main>
+<div id="practice-notice" role="status"></div>
+<section class="panel">
+<h1>自在下棋，一起練習。</h1>
+<p>先設定棋盤與貼目，再開始新局。預設禁止 AI 首選，可取消勾選做一般對弈。雙方停一手會結束本局；也可按結束練習。此模式不啟用正式賽的時間與連續低勝率判負。</p>
+<form id="practice-settings" class="form-grid">
+<label>棋盤<select name="board_size"><option value="19">19 路</option><option value="13">13 路</option><option value="9">9 路</option></select></label>
+<label>黑棋貼目<input name="komi" type="number" step="0.5" value="7.5" min="-50" max="50" required></label>
+<label>規則<select name="rules"><option value="chinese">中國規則</option><option value="japanese">日本規則</option></select></label>
+<label class="check"><input name="forbid_best" type="checkbox" checked>禁止 AI 首選</label>
+<button type="submit">開始新局</button>
+</form>
+</section>
+<div class="match-layout">
+<div class="board-wrap"><canvas id="practice-board" width="740" height="740" aria-label="雙人練習棋盤"></canvas></div>
+<aside>
+<article class="panel"><h2 id="practice-status">尚未開始</h2><p id="practice-rules"></p><p id="practice-selection">請先開始新局</p>
+<div class="actions"><button id="practice-submit" disabled>確認落子</button><button id="practice-pass" class="secondary" disabled>停一手</button><button id="practice-undo" class="secondary" disabled>悔棋一手</button><button id="practice-finish" class="secondary" disabled>結束練習</button><button id="practice-retry" class="secondary hidden">重新分析</button></div>
+<div id="practice-hints"></div></article>
+<article class="panel"><h2>如何練習</h2><ol><li>黑方先下，兩位玩家輪流操作同一個棋盤。</li><li>點棋盤選位置，再按「確認落子」。</li><li>紅叉是禁用首選，綠色數字是可參考的建議；也能選其他合法落點。</li><li>勝率已計入本局貼目，以輪到行棋方為觀點。</li><li>可悔棋、重開新局；結束前下載 SGF 棋譜保存。</li></ol>
+<p>關閉程式後本局會清除；已下載的棋譜會保留在你的電腦。</p><a id="practice-sgf" class="hidden" href="/api/practice/sgf">下載本局 SGF</a></article>
+</aside></div>
+</main></body></html>

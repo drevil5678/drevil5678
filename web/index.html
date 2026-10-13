@@ -16,8 +16,9 @@
       <nav>
         <button data-view="arena" class="active">賽場</button
         ><button data-view="standings">積分榜</button
+        ><button data-view="records">隊伍紀錄</button
         ><button data-view="admin">主辦管理</button
-        ><button data-view="guide">使用說明</button>
+        ><button data-view="guide">參賽說明</button>
       </nav>
       <span id="connection" class="badge">連線中</span>
     </header>
@@ -46,6 +47,12 @@
         <p>排序：積分 → 對手積分總和 → 報名順序。</p>
         <div id="ranking"></div>
         <div id="awards"></div>
+      </section>
+      <section id="records" class="view hidden">
+        <p class="eyebrow">TEAM MATCH RECORDS</p><h1>隊伍對戰紀錄</h1>
+        <form id="team-entry" class="panel inline"><label>本隊點棋碼<input id="team-code" type="password" autocomplete="off" placeholder="賽前由主辦方制發的固定隊伍碼" required></label><button type="submit">查看我的隊伍</button></form>
+        <label>查看隊伍<select id="record-team"></select></label>
+        <div id="team-records"></div>
       </section>
       <section id="admin" class="view hidden">
         <p class="eyebrow">TOURNAMENT DESK</p>
@@ -193,6 +200,7 @@
               ><button id="backup" class="secondary">備份資料庫</button
               ><button id="export" class="secondary">下載賽務與裁判紀錄</button
               ><button id="seats" class="secondary">列印本輪操作碼</button>
+              <button id="team-codes" class="secondary">賽前列印隊伍點棋碼</button>
             </div>
             <p>
               瑞士制共六輪；本輪全部完成後才能建立下一輪。現版本不自動處理輪空。操作碼只交給指定點棋手。
@@ -208,6 +216,7 @@
       <section id="guide" class="view hidden">
         <p class="eyebrow">EVENT OPERATIONS</p>
         <h1>上場前，先確認。</h1>
+        <p id="guide-settings"></p>
         <div class="grid">
           <article class="panel">
             <h2>選手</h2>
@@ -233,30 +242,15 @@
             </ol>
           </article>
           <article class="panel">
-            <h2>裁判與主辦方</h2>
-            <ol>
-              <li>先確認規則、模型與現場效能，再檢錄隊伍並建立首輪。</li>
-              <li>每桌開賽前檢查雙方自備設備選項，個別按「開賽」。</li>
-              <li>因主辦方系統或網路異常，可填寫原因並暫停、恢復或重賽。</li>
-              <li>雙方停一手會暫停，需由裁判依公告規則裁定勝隊及積分。</li>
-              <li>
-                用時耗盡勝方得 1 分；連續低勝率判負勝方得 1.25 分；敗方 0 分。
-              </li>
-              <li>每輪備份資料庫並匯出紀錄。若伺服器重啟，逐桌確認後恢復。</li>
-            </ol>
+            <h2>本隊賽程與紀錄</h2>
+            <p>隊伍點棋碼由主辦方賽前制發，同一隊整場沿用。每輪進入自己的對戰桌時輸入，系統會辨識本隊黑／白方。只交給本隊指定點棋手保管。</p>
+            <p>在「隊伍紀錄」可查看目前對戰、已完成結果、歷史棋局與 SGF 棋譜。已排定的下一場會顯示對手與桌次。</p>
+            <p>瑞士制下一輪需待本輪成績確定再配對；顯示「等待配對」時，下一輪對手尚未決定。</p>
           </article>
           <article class="panel">
-            <h2>50 台電腦的配置</h2>
-            <p>
-              32
-              台供各隊指定點棋手；其餘可供隊員共同討論、裁判、排行榜、備用席。最多
-              16 場同時對弈。所有電腦以瀏覽器連到同一台區域網路伺服器，AI
-              不需要安裝在每台選手電腦。
-            </p>
-            <p>
-              正式活動需另確認 GPU 主機、有線網路、電源與斷線處置。目前附帶 CPU
-              小模型供開發驗證，尚未證明現場效能。
-            </p>
+            <h2>雙人單機練習</h2>
+            <p>使用主辦方提供的練習套件，在自己的電腦雙擊 Start-Practice.cmd。兩人共用同一棋盤、輪流下黑白棋；不需要網路或隊伍點棋碼。</p>
+            <p>練習無計時、不計正式成績，可悔棋或重新開局；勝率已計入本局貼目。關閉前可下載 SGF 保存。</p>
           </article>
         </div>
       </section>
@@ -283,7 +277,7 @@
             </div>
             <form id="seat-form" class="panel">
               <label
-                >點棋手操作碼<input
+            >本隊固定點棋碼<input
                   id="seat-token"
                   type="password"
                   autocomplete="off"
