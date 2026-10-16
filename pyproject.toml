@@ -1,6 +1,6 @@
 [project]
 name = "yanghai-tournament"
-version = "0.3.2"
+version = "0.3.3"
 description = "楊海分站賽：圍棋、KataGo 與賽務管理"
 requires-python = ">=3.12,<3.14"
 dependencies = ["fastapi==0.141.1", "uvicorn==0.52.1", "psutil==7.1.0"]

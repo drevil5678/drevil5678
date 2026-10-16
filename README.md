@@ -74,14 +74,14 @@ node scripts/browser-smoke.cjs
 - AI 分析及排隊期間雙方時鐘暫停；提示到達後才啟動該方時鐘。這是系統異常／等待的處理政策，需在賽前向選手說明。等候時仍可觀察棋盤，現場須限制分析延遲以保持公平。
 - AI 首選指該次官方分析回傳且經本機合法性過濾的候選中勝率最高者，並非窮舉所有合法著。完全同勝率時按 visits 較多、座標字典序排序，只禁一個首選；這些細節需納入競賽介面的公告。
 - 已加入 Google 表單匯出的 CSV 匯入流程；尚未串接 Google 表單帳號、報名成功郵件、Facebook 公告或金流。此系統不會代你發送訊息。
-- 選手姓名與火星積分只顯示給管理員，公開頁只顯示隊名與成績。JSON 匯出移除操作碼；完整資料庫備份仍含操作碼，需安全保管。
+- 報名、編輯及匯入名單無需填寫火星積分。選手姓名只顯示給管理員，公開頁只顯示隊名與成績。JSON 匯出移除操作碼；完整資料庫備份仍含操作碼，需安全保管。
 - 程式已提交並推送至 `codex/yanghai-local-test`；Windows runner 已完成測試、打包與真實 AI 診斷。雲端環境設定草稿尚未發布，亦未驗證新任務的還原。
 
 ## 本地免安裝執行檔
 
 現場伺服器可使用免安裝資料夾版，其他電腦仍用瀏覽器連線。雙擊啟動器、獨立資料目錄、10 分鐘自動備份、啟動前 WAL 完整備份和重複啟動保護已加入。詳見 [docs/本地執行檔.md](docs/本地執行檔.md)。
 
-Windows 使用者先登入 GitHub，從 [Build Windows test package → 最新成功紀錄 → Artifacts](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 下載 **`yanghai-windows-lan-v0.3.2`**。先解壓附件 ZIP，再完整解壓內層程式 ZIP。正式區網用 **`Start-LAN.cmd`**，離線雙人練習用 **`Start-Practice.cmd`**。Windows 建置流程須通過正式 LAN 與獨立練習檢查才提供附件；流程見 [主辦操作補充](docs/主辦操作補充.md) 及 [參賽者說明](docs/參賽者說明.md)。
+Windows 使用者先登入 GitHub，從 [Build Windows test package → 最新成功紀錄 → Artifacts](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 下載 **`yanghai-windows-lan-v0.3.3`**。先解壓附件 ZIP，再完整解壓內層程式 ZIP。正式區網用 **`Start-LAN.cmd`**，離線雙人練習用 **`Start-Practice.cmd`**。Windows 建置流程須通過正式 LAN 與獨立練習檢查才提供附件；流程見 [主辦操作補充](docs/主辦操作補充.md) 及 [參賽者說明](docs/參賽者說明.md)。
 
 ```bash
 uv sync --locked --group build

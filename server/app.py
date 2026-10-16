@@ -395,7 +395,12 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                 raise HTTPException(409, "隊名重複")
             if t["players"] != body.players:
                 t["order"] = max(x["order"] for x in state["teams"])+1
-            t.update(body.model_dump())
+            updates = body.model_dump()
+            # The form no longer collects prior points. Keep historical values
+            # when an old registration is edited without that optional field.
+            if "mars_points" not in body.model_fields_set:
+                updates.pop("mars_points")
+            t.update(updates)
             t["name"] = t["name"].strip()
             event("team_edit", {"id": ident, "order": t["order"]})
             store.save()

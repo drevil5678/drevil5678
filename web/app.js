@@ -659,7 +659,6 @@ $("team-form").onsubmit = (event) => {
     const body = {
       name: f.name.value,
       players: [f.player1.value, f.player2.value],
-      mars_points: [Number(f.points1.value), Number(f.points2.value)],
       eligibility_checked: f.eligibility_checked.checked,
       checked_in: f.checked_in.checked,
     };
@@ -684,8 +683,6 @@ function editTeam(t) {
   f.name.value = t.name;
   f.player1.value = t.players[0];
   f.player2.value = t.players[1];
-  f.points1.value = t.mars_points[0];
-  f.points2.value = t.mars_points[1];
   f.checked_in.checked = t.checked_in;
   f.eligibility_checked.checked = t.eligibility_checked;
   $("team-form").scrollIntoView({ behavior: "smooth" });

@@ -110,3 +110,23 @@ def test_participant_guide_has_no_organizer_operations(tmp_path):
             assert private not in guide
         assert "等待配對" in guide and "雙人單機練習" in guide
         assert client.get("/openapi.json").status_code == 404
+
+
+def test_edit_without_prior_points_preserves_existing_registration_data(tmp_path):
+    app = create_app(tmp_path, engine=TestEngine())
+    with TestClient(app) as client:
+        auth = {"Authorization": "Bearer " + app.state.store.admin_token}
+        old = client.post("/api/admin/teams", headers=auth, json={
+            "name": "既有隊伍", "players": ["測試隊長", "測試隊員"],
+            "mars_points": [3, 2]}).json()
+        response = client.put(f"/api/admin/teams/{old['id']}", headers=auth, json={
+            "name": "編輯後隊名", "players": old["players"],
+            "checked_in": True, "eligibility_checked": True})
+        assert response.status_code == 200
+        edited = response.json()
+        assert edited["checked_in"] and edited["name"] == "編輯後隊名"
+        assert edited["mars_points"] == [3, 2]
+        assert edited["play_code"] == old["play_code"] and edited["order"] == old["order"]
+    reopened = Store(tmp_path)
+    assert reopened.state["teams"][0]["mars_points"] == [3, 2]
+    reopened.db.close()

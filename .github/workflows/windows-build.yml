@@ -32,25 +32,25 @@ jobs:
         run: .\.venv\Scripts\python.exe -m pytest -q
       - name: Build Windows portable package
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-lan-v0.3.2
+        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-lan-v0.3.3
       - name: Check bundled KataGo using real analysis
         shell: pwsh
-        run: .\dist\yanghai-windows-lan-v0.3.2\YanghaiTournament.exe --check --no-pause
+        run: .\dist\yanghai-windows-lan-v0.3.3\YanghaiTournament.exe --check --no-pause
       - name: Check built-in 18-team startup and credential preservation on restart
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\roster_smoke.py --executable dist\yanghai-windows-lan-v0.3.2\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\roster_smoke.py --executable dist\yanghai-windows-lan-v0.3.3\YanghaiTournament.exe
       - name: Check LAN package with real AI and 50 clients
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\lan_smoke.py --executable dist\yanghai-windows-lan-v0.3.2\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\lan_smoke.py --executable dist\yanghai-windows-lan-v0.3.3\YanghaiTournament.exe
       - name: Check offline two-person practice and formal data isolation
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\practice_smoke.py --executable dist\yanghai-windows-lan-v0.3.2\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\practice_smoke.py --executable dist\yanghai-windows-lan-v0.3.3\YanghaiTournament.exe
       - name: Provide downloadable ZIP and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: yanghai-windows-lan-v0.3.2
+          name: yanghai-windows-lan-v0.3.3
           path: |
-            dist/yanghai-windows-lan-v0.3.2.zip
-            dist/yanghai-windows-lan-v0.3.2.zip.sha256
+            dist/yanghai-windows-lan-v0.3.3.zip
+            dist/yanghai-windows-lan-v0.3.3.zip.sha256
           if-no-files-found: error
           retention-days: 14
