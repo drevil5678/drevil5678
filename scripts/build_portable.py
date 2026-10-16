@@ -108,6 +108,7 @@ def build(output):
         shutil.copy2(ROOT/"docs/活動部署.md", bundle/"EVENT-OPERATIONS.md")
         shutil.copy2(ROOT/"docs/區域網路部署.md", bundle/"LAN-SETUP.md")
         shutil.copy2(ROOT/"docs/參賽者說明.md", bundle/"PLAYER-GUIDE.md")
+        shutil.copy2(ROOT/"docs/18隊快速開賽.md", bundle/"18-TEAMS-SETUP.md")
         provenance.update({"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),
                            "model_purpose":"CPU development/preflight only, not formal event certification"})
         (bundle/"BUILD-INFO.json").write_text(json.dumps(provenance,indent=2)+"\n",encoding="utf-8")

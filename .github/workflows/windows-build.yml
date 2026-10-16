@@ -32,22 +32,22 @@ jobs:
         run: .\.venv\Scripts\python.exe -m pytest -q
       - name: Build Windows portable package
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-lan-v0.3.0
+        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-lan-v0.3.1
       - name: Check bundled KataGo using real analysis
         shell: pwsh
-        run: .\dist\yanghai-windows-lan-v0.3.0\YanghaiTournament.exe --check --no-pause
+        run: .\dist\yanghai-windows-lan-v0.3.1\YanghaiTournament.exe --check --no-pause
       - name: Check LAN package with real AI and 50 clients
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\lan_smoke.py --executable dist\yanghai-windows-lan-v0.3.0\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\lan_smoke.py --executable dist\yanghai-windows-lan-v0.3.1\YanghaiTournament.exe
       - name: Check offline two-person practice and formal data isolation
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\practice_smoke.py --executable dist\yanghai-windows-lan-v0.3.0\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\practice_smoke.py --executable dist\yanghai-windows-lan-v0.3.1\YanghaiTournament.exe
       - name: Provide downloadable ZIP and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: yanghai-windows-lan-v0.3.0
+          name: yanghai-windows-lan-v0.3.1
           path: |
-            dist/yanghai-windows-lan-v0.3.0.zip
-            dist/yanghai-windows-lan-v0.3.0.zip.sha256
+            dist/yanghai-windows-lan-v0.3.1.zip
+            dist/yanghai-windows-lan-v0.3.1.zip.sha256
           if-no-files-found: error
           retention-days: 14

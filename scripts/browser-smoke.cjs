@@ -98,10 +98,12 @@ async function get(endpoint, token) {
   await admin.locator('#settings-form [name="rules_confirmed"]').check();
   await admin.locator("#settings-form button[type=submit]").click();
   await admin.locator("#notice").filter({ hasText: "規則已儲存" }).waitFor();
-  for (const [index, name] of ["探索隊", "星際隊"].entries()) {
-    await admin.locator('#team-form [name="name"]').fill(name);
-    await admin.locator('#team-form [name="player1"]').fill("隊長" + index);
-    await admin.locator('#team-form [name="player2"]').fill("隊員" + index);
+  await admin.locator("#roster-import").fill("隊長姓名\t隊員姓名\t隊名\n隊長0\t隊員0\t探索隊\n隊長1\t隊員1\t星際隊");
+  await admin.getByRole("button", {name: "匯入名單與點棋碼", exact: true}).click();
+  await admin.locator("#notice").filter({hasText: "已匯入 2 隊"}).waitFor();
+  assert((await admin.locator("#roster-import").inputValue()) === "", "private roster remains in import field");
+  for (const name of ["探索隊", "星際隊"]) {
+    await admin.locator("#roster tr").filter({hasText: name}).getByRole("button", {name: "編輯", exact: true}).click();
     await admin.locator('#team-form [name="eligibility_checked"]').check();
     await admin.locator('#team-form [name="checked_in"]').check();
     await admin.locator("#team-form button[type=submit]").click();
@@ -256,6 +258,7 @@ async function get(endpoint, token) {
       {
         passed: true,
         checks: [
+          "Chinese spreadsheet roster import and clearing private input",
           "admin login",
           "rule settings",
           "registration and check-in",

@@ -867,19 +867,20 @@ $("team-codes").onclick = () => safe(async () => {
 const importPanel = el("article", undefined, "panel"),
   importForm = el("form"),
   csvBox = el("textarea");
-csvBox.rows = 6;
+csvBox.id = "roster-import";
+csvBox.rows = 12;
 csvBox.placeholder =
-  "name,captain,member,captain_points,member_points\n探索隊,王小明,陳小華,2,1";
+  "隊長姓名\t隊員姓名\t隊名\t點棋碼\n王小明\t陳小華\t探索隊\t\n\n也支援原有英文欄位 CSV。點棋碼可留白，由本機自動制發。";
 csvBox.required = true;
-csvBox.setAttribute("aria-label", "報名隊伍 CSV");
-const importButton = el("button", "匯入隊伍 CSV");
+csvBox.setAttribute("aria-label", "貼上報名名單與預製點棋碼");
+const importButton = el("button", "匯入名單與點棋碼");
 importButton.type = "submit";
 importForm.append(csvBox, importButton);
 importPanel.append(
   el("h2", "批次匯入報名名單"),
   el(
     "p",
-    "可由報名表匯出 CSV 後整理為下列格式，最多 32 隊。匯入後仍需逐隊確認資格並檢錄。",
+    "直接貼上含標題的 Excel／試算表資料，或英文欄位 CSV，最多 32 隊。依貼上順序建立報名順位；點棋碼可使用預製碼，留白則自動產生。重複匯入會整批拒絕，不會覆寫原有隊伍與點棋碼。匯入後仍需補齊姓名、確認資格並逐隊檢錄。",
   ),
   importForm,
 );
@@ -894,7 +895,7 @@ importForm.onsubmit = (event) => {
     });
     csvBox.value = "";
     await refreshAdmin();
-    notice(`已匯入 ${result.imported} 隊，請逐隊確認檢錄`);
+    notice(`已匯入 ${result.imported} 隊與固定點棋碼；可先列印發放，檢錄前請確認姓名與資格`);
   });
 };
 $("backup").parentElement.append(

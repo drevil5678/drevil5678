@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .engine import KataGo
-from .credentials import matches, matches_team_code, new_team_code
+from .credentials import imported_team_code, matches, matches_team_code, new_team_code
 from .go import IllegalMove, candidates, decode, encode, play, sgf
 from .lan import network_info
 from .store import Store
@@ -359,6 +359,8 @@ def create_app(runtime=None, engine=None, network=None):
             raise HTTPException(400, "火星積分須為非負有限數值")
         if body.checked_in and not body.eligibility_checked:
             raise HTTPException(400, "檢錄前請先確認參賽資格證明")
+        if body.checked_in and any(p.strip() in {"暫無", "待定", "待補", "未定", "尚未提供"} for p in body.players):
+            raise HTTPException(400, "請先補齊兩位隊員姓名，再完成檢錄")
 
     @app.post("/api/admin/teams")
     async def add_team(body: TeamInput, authorization: str | None = Header(None)):
@@ -402,27 +404,46 @@ def create_app(runtime=None, engine=None, network=None):
         require_admin(authorization)
         parsed = []
         try:
-            reader = csv.DictReader(io.StringIO(body.csv.lstrip("\ufeff")))
-            if not {"name", "captain", "member"}.issubset(reader.fieldnames or []):
-                raise ValueError("CSV 必須有 name,captain,member 欄位")
+            content = body.csv.lstrip("\ufeff").strip()
+            delimiter = "\t" if "\t" in content.partition("\n")[0] else ","
+            reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
+            aliases = {"隊名": "name", "隊長姓名": "captain", "隊員姓名": "member",
+                       "隊長火星積分": "captain_points", "隊員火星積分": "member_points",
+                       "點棋碼": "play_code", "認證碼": "play_code"}
+            fields = [aliases.get(f.strip(), f.strip()) for f in (reader.fieldnames or [])]
+            if not {"name", "captain", "member"}.issubset(fields) or len(set(fields)) != len(fields):
+                raise ValueError("須包含隊名、隊長姓名、隊員姓名欄位，且欄位不可重複")
+            reader.fieldnames = fields
             for row in reader:
+                if None in row:
+                    raise ValueError("部分資料的欄位數超過標題")
                 team = TeamInput(name=row["name"], players=[row["captain"], row["member"]],
                                  mars_points=[float(row.get("captain_points") or 0), float(row.get("member_points") or 0)])
                 validate_team(team)
-                parsed.append(team)
+                code = row.get("play_code") or ""
+                parsed.append((team, imported_team_code(code) if code.strip() else None))
         except (ValueError, TypeError, csv.Error) as exc:
-            raise HTTPException(400, "CSV 格式錯誤：" + str(exc)[:300]) from exc
+            raise HTTPException(400, "名單格式錯誤：請檢查欄位、姓名、點數及 12 碼點棋碼") from exc
         async with lock:
             if state["rounds"] or not parsed or len(state["teams"])+len(parsed) > 32:
                 raise HTTPException(409, "已開賽、CSV 無隊伍或匯入後超過 32 隊")
-            names = [t.name.strip() for t in parsed] + [t["name"] for t in state["teams"]]
+            names = [t.name.strip() for t, _ in parsed] + [t["name"] for t in state["teams"]]
             if len(set(names)) != len(names):
                 raise HTTPException(409, "CSV 或現有名單中有重複隊名；未匯入任何隊伍")
+            supplied = [code for _, code in parsed if code]
+            used = [t["play_code"] for t in state["teams"]]
+            if len(set(supplied + used)) != len(supplied + used):
+                raise HTTPException(409, "點棋碼重複；未匯入任何隊伍")
+            # Reserve every preissued code before generating codes for blank cells.
+            used += supplied
             order = max((t["order"] for t in state["teams"]), default=0)
-            for i, t in enumerate(parsed, 1):
+            for i, (t, code) in enumerate(parsed, 1):
+                if code is None:
+                    code = new_team_code(used)
+                    used.append(code)
                 state["teams"].append({**t.model_dump(), "name": t.name.strip(),
                                       "id": uuid.uuid4().hex[:12], "order": order+i,
-                                      "play_code": new_team_code(t["play_code"] for t in state["teams"])})
+                                      "play_code": code})
             event("team_import", {"count": len(parsed)})
             store.save()
             return {"imported": len(parsed)}
