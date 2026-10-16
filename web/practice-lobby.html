@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>自由練習大廳 · 楊海分站賽</title><link rel="stylesheet" href="/static/style.css"><script defer src="/static/practice-lobby.js"></script></head>
+<body>
+<header><span class="brand"><span class="mark">火</span><span>自由練習大廳<small>與朋友切磋，或挑戰電腦</small></span></span><span class="badge">區網練習 · 最多 15 桌 · 不計正式成績</span></header>
+<main>
+<p id="lobby-notice" role="status"></p>
+<section id="lobby-view">
+<article class="panel"><div class="heading"><h1>找一桌，一起下棋。</h1><strong id="lobby-count">載入中</strong></div>
+<p>自行開桌，或進入朋友的桌子入座。每桌的棋盤與操作碼各自獨立；不需要正式賽的隊伍點棋碼。</p>
+<p id="lobby-ai" role="status"></p><div id="practice-share-links"></div>
+<p>上限包含等待對手、對弈中及結束未收桌的桌子。開桌者收桌後釋放名額；30 分鐘未落子或操作會自動收桌。關閉主機程式會清除全部練習，請先下載棋譜。</p></article>
+<div class="match-layout"><article class="panel"><h2>自己開桌</h2>
+<form id="lobby-create" class="form-grid">
+<label>桌名<input name="name" maxlength="40" value="自由練習" required></label>
+<label>你的暱稱<input name="player_name" maxlength="30" value="玩家" required></label>
+<label>對戰方式<select name="mode"><option value="pvp">區網真人對戰</option><option value="ai">與電腦對戰</option><option value="local">同機雙人</option></select></label>
+<label>你的棋色<select name="human_color"><option value="B">黑棋先下</option><option value="W">白棋後下</option></select></label>
+<label>棋盤<select name="board_size"><option value="19">19 路</option><option value="13">13 路</option><option value="9">9 路</option></select></label>
+<label>黑棋貼目<input name="komi" type="number" step="0.5" value="7.5" min="-50" max="50" required></label>
+<label>規則<select name="rules"><option value="chinese">中國規則</option><option value="japanese">日本規則</option></select></label>
+<label class="check"><input name="forbid_best" type="checkbox" checked>雙方禁止 AI 首選</label>
+<button id="lobby-create-button" type="submit">開桌</button></form>
+<p>同機雙人由開桌者操作雙方；區網真人各自入座一方；電腦會自動落子。練習無計時、不使用正式賽的連續低勝率判負。</p></article>
+<article class="panel"><h2>目前桌子</h2><div id="lobby-rooms" class="practice-room-list"></div></article></div>
+</section>
+<section id="room-view" class="hidden">
+<div class="heading"><div><h1 id="room-title"></h1><p id="room-details"></p><p id="room-players"></p></div><button id="room-back" class="secondary">回大廳（保留此桌）</button></div>
+<div id="room-entry" class="panel">
+<form id="room-join" class="inline"><label>你的暱稱<input id="room-join-name" maxlength="30" value="玩家" required></label><button type="submit">入座對戰</button></form>
+<form id="room-recover" class="inline"><label>已有本桌操作碼？<input id="room-token" type="password" autocomplete="off" placeholder="貼上本桌操作碼" required></label><button type="submit" class="secondary">恢復操作</button></form>
+</div>
+<div id="room-credential" class="panel hidden"><label>你的本桌操作碼<input id="room-my-token" type="password" readonly autocomplete="off"></label><button id="room-copy-token" class="secondary">複製操作碼</button><p>重新整理可繼續；換瀏覽器時需用此碼恢復。只保管自己的碼，不要交給對手或觀戰者。</p></div>
+<div class="match-layout"><div class="board-wrap"><canvas id="room-board" width="740" height="740" aria-label="練習棋盤"></canvas></div><aside>
+<article class="panel"><h2 id="room-status">讀取棋局中</h2><p id="room-role"></p><p id="room-selection"></p>
+<p>勝率已計入貼目，以輪到行棋方為觀點。</p>
+<div class="actions"><button id="room-submit" disabled>確認落子</button><button id="room-pass" class="secondary" disabled>停一手</button><button id="room-undo" class="secondary" disabled>悔棋</button><button id="room-finish" class="secondary" disabled>認輸</button><button id="room-retry" class="secondary hidden">重新分析</button></div>
+<div id="room-undo-answer" class="hidden"><p id="room-undo-message"></p><div class="actions"><button id="room-undo-accept">同意悔棋</button><button id="room-undo-reject" class="secondary">拒絕</button></div></div>
+<div id="room-hints"></div></article>
+<article class="panel"><h2>棋譜與收桌</h2><a id="room-sgf">下載本局 SGF</a><p>雙方停一手會結束本局；死活與計分可自行討論。電腦不自動認輸。真人對戰的悔棋需要對手同意。</p><button id="room-close" class="danger hidden">收桌離開（釋放名額）</button><p>收桌或逾時後棋譜會清除，請先下載保存。</p></article>
+</aside></div>
+</section>
+</main></body></html>

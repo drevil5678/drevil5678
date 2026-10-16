@@ -102,6 +102,12 @@ def build(output):
                 '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" --lan --no-pause\nif errorlevel 1 pause\n',
                 encoding="ascii")
             (bundle/"Start-Practice.cmd").write_text(
+                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" --practice-lan --no-pause\nif errorlevel 1 pause\n',
+                encoding="ascii")
+            (bundle/"Start-Practice-LAN.cmd").write_text(
+                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" --practice-lan --no-pause\nif errorlevel 1 pause\n',
+                encoding="ascii")
+            (bundle/"Start-Practice-Offline.cmd").write_text(
                 '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" --practice --no-pause\nif errorlevel 1 pause\n',
                 encoding="ascii")
         shutil.copy2(ROOT/"docs/本地執行檔.md", bundle/"READ-ME-FIRST.md")
@@ -109,6 +115,7 @@ def build(output):
         shutil.copy2(ROOT/"docs/區域網路部署.md", bundle/"LAN-SETUP.md")
         shutil.copy2(ROOT/"docs/參賽者說明.md", bundle/"PLAYER-GUIDE.md")
         shutil.copy2(ROOT/"docs/18隊快速開賽.md", bundle/"18-TEAMS-SETUP.md")
+        shutil.copy2(ROOT/"docs/區網練習大廳.md", bundle/"PRACTICE-LAN-SETUP.md")
         provenance.update({"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),
                            "model_purpose":"CPU development/preflight only, not formal event certification"})
         (bundle/"BUILD-INFO.json").write_text(json.dumps(provenance,indent=2)+"\n",encoding="utf-8")

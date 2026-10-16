@@ -390,6 +390,11 @@ canvas {
 .team-link { padding: 4px 10px; }
 #team-records table { min-width: 720px; }
 #practice-notice { color: var(--red); margin-bottom: 18px; }
+#lobby-notice { color: var(--red); }
+.practice-room-list { display: grid; gap: 12px; }
+.practice-room-card { border: 1px solid var(--line); border-radius: 8px; padding: 16px; overflow-wrap: anywhere; }
+#room-credential input { max-width: 100%; }
+#practice-share-links { overflow-wrap: anywhere; }
 .seat-slip code {
   display: block;
   font-size: 17px;

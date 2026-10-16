@@ -47,4 +47,4 @@ p$("practice-board").onclick=e=>{if(!practiceGame||practiceBusy||practiceGame.st
 p$("practice-submit").onclick=()=>pRun(()=>pApi("/api/practice/move",{...pVersion(),move:practiceSelected}));
 p$("practice-pass").onclick=()=>pRun(()=>pApi("/api/practice/move",{...pVersion(),move:"pass"}));
 for(const action of ["undo","finish","retry"])p$("practice-"+action).onclick=()=>pRun(()=>pApi("/api/practice/"+action,pVersion()));
-pApi("/api/practice/state").then(data=>{practiceGame=data.game;pRender();}).catch(()=>{p$("practice-notice").textContent="請用 Start-Practice.cmd 啟動單機練習後再開啟此頁。";pRender();});
+pApi("/api/practice/state").then(data=>{practiceGame=data.game;pRender();}).catch(()=>{p$("practice-notice").textContent="請用 Start-Practice-Offline.cmd 啟動單機練習後再開啟此頁。";pRender();});
