@@ -12,7 +12,7 @@ def test_eighteen_preissued_tsv_teams_keep_codes_order_and_privacy(tmp_path):
     codes = [new_team_code() for _ in range(18)]
     names = ["alphago", "AlphaGo"] + [f"測試隊{i}" for i in range(2, 18)]
     roster = "\ufeff隊長姓名\t隊員姓名\t隊名\t點棋碼\n" + "\n".join(
-        f"測試隊長{i}\t{'暫無' if i == 0 else '陳浡𠄘'}\t{name}\t{code.lower()}"
+        f"測試隊長{i}\t{'暫無' if i == 0 else '測試𠄘'}\t{name}\t{code.lower()}"
         for i, (name, code) in enumerate(zip(names, codes)))
     app = create_app(tmp_path, engine=TestEngine())
     with TestClient(app) as client:
