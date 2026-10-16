@@ -336,7 +336,7 @@ th {
   border-radius: 8px;
   align-self: start;
 }
-.champion-prize, .bracket-prize {
+.bracket-prize {
   color: #84601e;
   font-weight: 700;
   background: #faf0d7;

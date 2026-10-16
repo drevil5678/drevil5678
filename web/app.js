@@ -205,7 +205,7 @@ async function refreshBracket() {
   if (JSON.stringify(data) === JSON.stringify(bracketState)) return;
   bracketState = data;
   $("bracket-champion").replaceChildren();
-  if (data.champion) $("bracket-champion").append(el("p", `冠軍：${data.champion.name} · 獎金 NT$20,000`, "champion-banner"));
+  if (data.champion) $("bracket-champion").append(el("p", `冠軍：${data.champion.name}`, "champion-banner"));
   $("bracket-tree").replaceChildren();
   for (const stage of data.stages) {
     const column = el("div", undefined, "bracket-column");
