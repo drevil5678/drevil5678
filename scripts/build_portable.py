@@ -15,6 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+GPU_URL = "https://github.com/lightvector/KataGo/releases/download/v1.16.3/katago-v1.16.3-opencl-windows-x64.zip"
+GPU_SHA256 = "de59ee8473be6a61d1293556170418cebdc99d03a49c9985fdad328a21520dcc"
 
 
 def verified_archive(url, expected):
@@ -63,9 +65,22 @@ def copy_engine(bundle):
             z.extractall(destination)
         if not (destination/"katago.exe").exists():
             raise RuntimeError("官方 Windows 套件結構與預期不同，請檢查後再打包")
+        gpu_archive = verified_archive(GPU_URL, GPU_SHA256)
+        gpu_destination = bundle/"katago-gpu"
+        gpu_destination.mkdir()
+        with zipfile.ZipFile(gpu_archive) as z:
+            for member in z.infolist():
+                if not (gpu_destination/member.filename).resolve().is_relative_to(gpu_destination.resolve()):
+                    raise RuntimeError("GPU 套件含無效路徑")
+            z.extractall(gpu_destination)
+        if not (gpu_destination/"katago.exe").is_file():
+            raise RuntimeError("官方 GPU 套件缺少 katago.exe")
     else:
         raise RuntimeError("目前打包流程只支援 Linux / Windows x86_64")
-    return {"binary_url":url,"binary_archive_sha256":digest,"model_url":model_url,"model_archive_sha256":model_hash}
+    result = {"binary_url":url,"binary_archive_sha256":digest,"model_url":model_url,"model_archive_sha256":model_hash}
+    if platform.system() == "Windows":
+        result.update(gpu_binary_url=GPU_URL, gpu_binary_archive_sha256=GPU_SHA256, gpu_backend="OpenCL")
+    return result
 
 
 def build(output):
@@ -91,11 +106,15 @@ def build(output):
         provenance = copy_engine(bundle)
         (bundle/"config").mkdir(exist_ok=True)
         shutil.copy2(ROOT/"config/analysis-cpu.cfg", bundle/"config/analysis.cfg")
+        shutil.copy2(ROOT/"config/analysis-gpu.cfg", bundle/"config/analysis-gpu.cfg")
         # Keep sample configuration separate: first launch creates tournament.json.
         configuration = {"host":"0.0.0.0","port":8000,"data_dir":"data",
                          "katago_bin":"katago/katago.exe" if os.name=="nt" else "katago/AppRun",
                          "katago_model":"model/model.txt.gz","katago_config":"config/analysis.cfg",
-                         "ai_concurrency":1,"auto_backup_seconds":600,"open_browser":True}
+                         "ai_concurrency":1,"auto_backup_seconds":600,"open_browser":True,
+                         "engine_mode":"auto" if os.name=="nt" else "cpu",
+                         "katago_gpu_bin":"katago-gpu/katago.exe","katago_gpu_config":"config/analysis-gpu.cfg",
+                         "gpu_concurrency":4,"gpu_device":-1}
         (bundle/"tournament.example.json").write_text(json.dumps(configuration,indent=2)+"\n",encoding="utf-8")
         if os.name == "nt":
             (bundle/"Start-LAN.cmd").write_text(
@@ -110,16 +129,25 @@ def build(output):
             (bundle/"Start-Practice-Offline.cmd").write_text(
                 '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" --practice --no-pause\nif errorlevel 1 pause\n',
                 encoding="ascii")
+            for name, arguments in (("Start-LAN-GPU.cmd", "--lan --engine gpu"),
+                                    ("Start-LAN-CPU.cmd", "--lan --engine cpu")):
+                (bundle/name).write_text('@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" '
+                                        + arguments + ' --no-pause\nif errorlevel 1 pause\n', encoding="ascii")
+            for name, arguments in (("Check-GPU.cmd", "--engine gpu --check"),
+                                    ("Benchmark-12-Tables.cmd", "--engine gpu --benchmark --tables 12")):
+                (bundle/name).write_text('@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiTournament.exe" '
+                                        + arguments + ' --no-pause\npause\n', encoding="ascii")
         shutil.copy2(ROOT/"docs/本地執行檔.md", bundle/"READ-ME-FIRST.md")
         shutil.copy2(ROOT/"docs/活動部署.md", bundle/"EVENT-OPERATIONS.md")
         shutil.copy2(ROOT/"docs/區域網路部署.md", bundle/"LAN-SETUP.md")
         shutil.copy2(ROOT/"docs/參賽者說明.md", bundle/"PLAYER-GUIDE.md")
         shutil.copy2(ROOT/"docs/18隊快速開賽.md", bundle/"18-TEAMS-SETUP.md")
         shutil.copy2(ROOT/"docs/區網練習大廳.md", bundle/"PRACTICE-LAN-SETUP.md")
+        shutil.copy2(ROOT/"docs/GPU與12桌測速.md", bundle/"GPU-AND-BENCHMARK.md")
         for filename in ("TEAM-CODES.csv", "TEAM-CODES.html"):
             shutil.copy2(ROOT/filename, bundle/filename)
         provenance.update({"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),
-                           "model_purpose":"CPU development/preflight only, not formal event certification"})
+                           "model_purpose":"Development/preflight only; GPU support does not certify model strength"})
         (bundle/"BUILD-INFO.json").write_text(json.dumps(provenance,indent=2)+"\n",encoding="utf-8")
         # Only the organizer-authorized static team codes are included;
         # live databases and administrator credentials remain local.

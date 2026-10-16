@@ -78,7 +78,7 @@ def main(executable=None, port=None):
             bundle = ROOT
             settings = defaults()
             command = [sys.executable, str(ROOT / "launcher.py")]
-        for field in ("katago_bin", "katago_model", "katago_config"):
+        for field in ("katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
             settings[field] = str(bundle / settings[field])
         # --practice-lan must use the configured tournament port and same database.
         settings.update(host="127.0.0.1", port=port, data_dir=str(data), open_browser=False)
@@ -88,7 +88,7 @@ def main(executable=None, port=None):
         command += ["--config", str(config), "--practice-lan", "--port", str(port),
                     "--empty-roster", "--no-browser", "--no-pause"]
         environment = os.environ.copy()
-        for key in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "AI_CONCURRENCY", "TOURNAMENT_DATA"):
+        for key in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "AI_CONCURRENCY", "TOURNAMENT_DATA", "KATAGO_ENGINE_MODE", "KATAGO_GPU_BIN", "KATAGO_GPU_CONFIG", "AI_GPU_CONCURRENCY", "KATAGO_GPU_DEVICE"):
             environment.pop(key, None)
         # Prove all inference runs from local model/binary files.
         for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):

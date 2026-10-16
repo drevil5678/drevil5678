@@ -703,8 +703,11 @@ async function refreshNetwork() {
   $("network-message").textContent = network.warning || (network.interfaces.length > 1
     ? "找到多個網路位址，請選擇與選手相同場地網路的網卡；不要選 VPN。"
     : "先讓一台選手電腦打開此網址，再讓其他電腦加入。選手不需要安裝程式。");
-  $("network-ai").textContent = network.ai_ready ? "AI 已就緒" : "AI 未就緒，請先排除原因";
-  $("network-ai").className = "badge" + (network.ai_ready ? "" : " warn");
+  const engine = network.ai_engine;
+  $("network-ai").textContent = network.ai_ready ? `AI 已就緒 · ${engine?.label || "AI"}` : "AI 未就緒，請先排除原因";
+  $("network-ai").className = "badge" + (network.ai_ready && !engine?.warning ? "" : " warn");
+  $("engine-details").textContent = engine ? [engine.error, engine.warning,
+    engine.ready && engine.concurrency ? `目前使用 ${engine.label}，同時分析 ${engine.concurrency} 局；分析中 ${engine.active || 0} 局、排隊 ${engine.waiting || 0} 局。` : ""].filter(Boolean).join(" ") : "";
   $("network-data").textContent = `賽事資料：${network.data_dir}；備份位置：${network.backup_dir}`;
   updateParticipantUrl();
 }

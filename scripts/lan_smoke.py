@@ -24,13 +24,13 @@ def main(executable=None, port=8768):
             executable = Path(executable).resolve()
             bundle = executable.parent
             settings = json.loads((bundle/"tournament.example.json").read_text())
-            for field in ("katago_bin", "katago_model", "katago_config"):
+            for field in ("katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
                 settings[field] = str(bundle/settings[field])
             command = [str(executable)]
         else:
             from launcher import defaults
             settings = defaults()
-            for field in ("katago_bin", "katago_model", "katago_config"):
+            for field in ("katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
                 settings[field] = str(ROOT/settings[field])
             command = [sys.executable, str(ROOT/"launcher.py")]
         # Deliberately start from an old loopback setting: --lan must override it.
@@ -40,7 +40,7 @@ def main(executable=None, port=8768):
         config.write_text(original)
         command += ["--config", str(config), "--lan", "--empty-roster", "--no-browser", "--no-pause"]
         environment = os.environ.copy()
-        for name in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "AI_CONCURRENCY", "TOURNAMENT_DATA"):
+        for name in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "AI_CONCURRENCY", "TOURNAMENT_DATA", "KATAGO_ENGINE_MODE", "KATAGO_GPU_BIN", "KATAGO_GPU_CONFIG", "AI_GPU_CONCURRENCY", "KATAGO_GPU_DEVICE"):
             environment.pop(name, None)
         for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
             environment[name] = "http://127.0.0.1:1"

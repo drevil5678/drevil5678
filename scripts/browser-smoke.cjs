@@ -82,6 +82,8 @@ async function get(endpoint, token) {
   await admin.locator("#admin-token").fill(adminToken);
   await admin.locator("#login button[type=submit]").click();
   await admin.locator("#admin-content").waitFor({ state: "visible" });
+  await admin.locator("#network-ai").filter({ hasText: "CPU" }).waitFor();
+  assert((await admin.locator("#engine-details").innerText()).includes("目前使用 CPU"), "Admin does not identify the real CPU backend");
   const network = await get("/api/admin/network", adminToken);
   assert(network.lan_enabled && network.interfaces.length, "LAN addresses unavailable");
   base = new URL(network.interfaces[0].url).origin;

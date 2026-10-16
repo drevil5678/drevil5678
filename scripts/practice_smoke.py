@@ -32,7 +32,7 @@ def main(executable=None, port=8770):
             bundle = ROOT
             settings = defaults()
             command = [sys.executable, str(ROOT/"launcher.py")]
-        for field in ("katago_bin", "katago_model", "katago_config"):
+        for field in ("katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
             settings[field] = str(bundle/settings[field])
         settings.update({"host": "0.0.0.0", "port": port, "data_dir": str(formal), "open_browser": False})
         config = temp/"tournament.json"
@@ -40,7 +40,7 @@ def main(executable=None, port=8770):
         config.write_text(original)
         command += ["--config", str(config), "--practice", "--port", str(port), "--no-browser", "--no-pause"]
         environment = os.environ.copy()
-        for key in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "AI_CONCURRENCY", "TOURNAMENT_DATA"):
+        for key in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "AI_CONCURRENCY", "TOURNAMENT_DATA", "KATAGO_ENGINE_MODE", "KATAGO_GPU_BIN", "KATAGO_GPU_CONFIG", "AI_GPU_CONCURRENCY", "KATAGO_GPU_DEVICE"):
             environment.pop(key, None)
         for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
             environment[key] = "http://127.0.0.1:1"

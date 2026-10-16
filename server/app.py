@@ -361,6 +361,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                               "port": (request.scope.get("server") or (None, 8000))[1]}
         info = network_info(binding["host"], binding["port"])
         return {**info, "ai_ready": not ai.failure,
+                "ai_engine": ai.status() if callable(getattr(ai, "status", None)) else {"label": "AI", "ready": not ai.failure},
                 "data_dir": str(store.runtime.resolve()),
                 "backup_dir": str((store.runtime/"backups").resolve())}
 

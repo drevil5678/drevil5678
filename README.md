@@ -1,10 +1,10 @@
 # 楊海分站賽：AI 協作圍棋賽務系統
 
-目前版本 **v0.5.1**。依主辦方提供的章程與後續指定實作：18 隊預載、五輪瑞士賽、八強淘汰賽、每局骰子猜先，以及同一網址的單機練習。活動為 **2026-10-17 13:00–18:00，Asia/Taipei**。
+目前版本 **v0.6.0**。依主辦方提供的章程與後續指定實作：18 隊預載、五輪瑞士賽、八強淘汰賽、每局骰子猜先，以及同一網址的單機練習。活動為 **2026-10-17 13:00–18:00，Asia/Taipei**。
 
 ## 開始使用
 
-登入 GitHub，從 [Windows 建置頁](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 的最新成功紀錄下載 `yanghai-windows-lan-v0.5.1`。解壓附件與內層程式 ZIP，保留全部檔案，雙擊 **Start-LAN.cmd**。主機不需 Python／uv，其他電腦只需瀏覽器。
+登入 GitHub，從 [Windows 建置頁](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 的最新成功紀錄下載 `yanghai-windows-lan-v0.6.0`。解壓附件與內層程式 ZIP，保留全部檔案，雙擊 **Start-LAN.cmd**。主機不需 Python／uv，其他電腦只需瀏覽器。
 
 1. 使用本機 `data/admin-token` 登入主辦管理，在「區域網路開賽」複製參賽網址。
 2. 18 隊與固定點棋碼已內建，所有隊伍預設完成資格確認及檢錄。「暫無」是有效姓名，不必補人。無需火星積分。
@@ -31,6 +31,10 @@
 在賽場、積分榜、隊伍紀錄同列選單按「練習」，與正式網站使用同一連接埠，不需再啟動服務。兩人在同一台電腦輪流落子，或一人對電腦；不提供多台電腦連線對打或其他裝置入桌。每個瀏覽器只保留一桌，收桌後才能開新局；練習不計正式成績。
 
 每桌綁定開桌瀏覽器與裝置，開桌後使用原瀏覽器繼續。收桌、逾時或主機重啟會清除練習棋局，請先下載 SGF。練習與正式比賽共用 AI，實際同時運作量須依硬體彩排。`Start-Practice.cmd`／`Start-Practice-LAN.cmd` 為主網站啟動捷徑；舊離線雙人模式仍可使用 `Start-Practice-Offline.cmd`／`--practice`。
+
+## RTX 4050 等 NVIDIA 顯卡
+
+Windows 套件已附 GPU 引擎。先執行 `Check-GPU.cmd` 確認顯卡，停止伺服器後可用 `Benchmark-12-Tables.cmd` 做 12 桌、3 輪真實中盤分析。`Start-LAN.cmd` 自動選 NVIDIA，失敗時明確顯示 CPU；`Start-LAN-GPU.cmd` 要求 GPU 成功才讓 AI 就緒。主辦後台顯示實際引擎、顯卡與排隊數，詳見 [GPU 與 12 桌測速](docs/GPU與12桌測速.md)。模型、visits、隊伍及棋局不因 GPU 模式而重設。
 
 ## 開發與檢查
 

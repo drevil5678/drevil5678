@@ -65,6 +65,10 @@ def defaults():
         "katago_model": "model/model.txt.gz" if frozen else ".runtime/model.txt.gz",
         "katago_config": "config/analysis.cfg" if frozen else ".runtime/analysis.cfg",
         "ai_concurrency": 1, "auto_backup_seconds": 600, "open_browser": True,
+        "engine_mode": "auto" if frozen and os.name == "nt" else "custom",
+        "katago_gpu_bin": "katago-gpu/katago.exe" if frozen else ".runtime/katago-gpu/katago.exe",
+        "katago_gpu_config": "config/analysis-gpu.cfg",
+        "gpu_concurrency": 4, "gpu_device": -1,
     }
 
 
@@ -92,11 +96,35 @@ def load_settings(filename):
         raise ValueError("auto_backup_seconds 須至少 60 秒")
     if type(settings["open_browser"]) is not bool:
         raise ValueError("open_browser 必須是 true 或 false")
-    for name in ("data_dir", "katago_bin", "katago_model", "katago_config"):
+    if settings["engine_mode"] not in ("auto", "cpu", "gpu", "custom"):
+        raise ValueError("engine_mode 必須是 auto、cpu、gpu 或 custom")
+    if type(settings["gpu_concurrency"]) is not int or not 1 <= settings["gpu_concurrency"] <= 8:
+        raise ValueError("gpu_concurrency 必須是 1–8 的整數")
+    if type(settings["gpu_device"]) is not int or not -1 <= settings["gpu_device"] <= 1023:
+        raise ValueError("gpu_device 必須是 -1（自動選 NVIDIA）或有效裝置編號")
+    for name in ("data_dir", "katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
         if not isinstance(settings[name], str) or not settings[name].strip():
             raise ValueError(name + " 必須是非空白路徑")
-        settings[name] = str((filename.parent / settings[name]).resolve())
+        anchor = base_directory() if name in ("katago_gpu_bin", "katago_gpu_config") and name not in values else filename.parent
+        settings[name] = str((anchor / settings[name]).resolve())
     return settings
+
+
+def engine_environment(settings, mode=None):
+    # Preserve explicit third-party engines and old customized configurations.
+    requested = mode or os.environ.get("KATAGO_ENGINE_MODE") or settings["engine_mode"]
+    if requested == "auto":
+        stock = defaults()
+        customized = any(settings[field] != str((base_directory() / stock[field]).resolve())
+                         for field in ("katago_bin", "katago_config"))
+        if customized or any(name in os.environ for name in ("KATAGO_BIN", "KATAGO_CONFIG")):
+            requested = "custom"
+    os.environ["KATAGO_ENGINE_MODE"] = requested
+    for key, field in (("KATAGO_BIN", "katago_bin"), ("KATAGO_MODEL", "katago_model"),
+                       ("KATAGO_CONFIG", "katago_config"), ("AI_CONCURRENCY", "ai_concurrency"),
+                       ("KATAGO_GPU_BIN", "katago_gpu_bin"), ("KATAGO_GPU_CONFIG", "katago_gpu_config"),
+                       ("AI_GPU_CONCURRENCY", "gpu_concurrency"), ("KATAGO_GPU_DEVICE", "gpu_device")):
+        os.environ.setdefault(key, str(settings[field]))
 
 
 def backup_before_start(directory):
@@ -134,7 +162,7 @@ def browser_when_ready(port, stop, host="127.0.0.1", view="admin"):
     from server.lan import admin_url
     url = admin_url(host, port).split("/#", 1)[0]
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    for _ in range(500):
+    for _ in range(2800):
         if stop.wait(.25):
             return
         try:
@@ -160,6 +188,11 @@ def main(argv=None):
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--empty-roster", action="store_true", help="新資料庫不預載名單，供獨立測試；不刪除現有隊伍")
     parser.add_argument("--check", action="store_true", help="真實 AI 啟動診斷，不建立／更動賽事資料庫")
+    parser.add_argument("--engine", choices=("auto", "cpu", "gpu", "custom"), help="選擇 AI；gpu 必須成功使用 NVIDIA，不會退回 CPU")
+    parser.add_argument("--benchmark", action="store_true", help="真實多桌 AI 測速，不建立／更動賽事紀錄")
+    parser.add_argument("--tables", type=int, default=12, help="測速同時送出的分析數，預設 12")
+    parser.add_argument("--benchmark-rounds", type=int, default=3)
+    parser.add_argument("--benchmark-visits", type=int, help="測速 visits；省略時沿用已儲存的賽事設定")
     parser.add_argument("--no-pause", action="store_true", help="錯誤時不等待 Enter，供自動化使用")
     args = parser.parse_args(argv)
     practice_mode = args.practice
@@ -171,9 +204,7 @@ def main(argv=None):
         if not 1 <= port <= 65535:
             raise ValueError("port 必須是 1–65535")
         os.environ["TOURNAMENT_DATA"] = settings["data_dir"]
-        for key, field in (("KATAGO_BIN", "katago_bin"), ("KATAGO_MODEL", "katago_model"), ("KATAGO_CONFIG", "katago_config"),
-                           ("AI_CONCURRENCY", "ai_concurrency")):
-            os.environ.setdefault(key, str(settings[field]))
+        engine_environment(settings, args.engine)
         os.environ["AUTO_BACKUP_SECONDS"] = str(settings["auto_backup_seconds"])
         directory = Path(settings["data_dir"])
         if practice_mode:
@@ -181,7 +212,7 @@ def main(argv=None):
             directory = practice_directory if practice_directory != directory else directory.parent/"practice-only"
             os.environ["TOURNAMENT_DATA"] = str(directory)
         with InstanceLock(directory):
-            if args.check:
+            if args.check or args.benchmark:
                 from server.engine import KataGo
                 async def check():
                     ai = KataGo(directory)
@@ -189,7 +220,21 @@ def main(argv=None):
                     try:
                         if ai.failure:
                             raise RuntimeError(ai.failure)
-                        print("PASS: 真實 KataGo 模型載入與分析成功。")
+                        if args.benchmark:
+                            from server.benchmark import current_settings, run
+                            benchmark_settings = current_settings(directory)
+                            if args.benchmark_visits is not None:
+                                if not 16 <= args.benchmark_visits <= 100000:
+                                    raise ValueError("測速 visits 須為 16–100000")
+                                benchmark_settings["visits"] = args.benchmark_visits
+                            report = await run(ai, benchmark_settings, args.tables, args.benchmark_rounds)
+                            destination = directory / "benchmark-report.json"
+                            destination.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                            print(f"分析等待（含排隊）：中位數 {report['median_seconds']} 秒，95% {report['p95_seconds']} 秒，最慢 {report['max_seconds']} 秒。")
+                            print("測速報告：", destination)
+                        else:
+                            print("PASS: 真實 KataGo 模型載入與分析成功。")
+                        print("AI_READY " + json.dumps(ai.status(), ensure_ascii=False))
                     finally:
                         await ai.close()
                 asyncio.run(check())

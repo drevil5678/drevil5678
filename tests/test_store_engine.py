@@ -57,3 +57,38 @@ def test_analysis_wire_includes_actual_komi_rules_and_position(tmp_path):
         assert [q["komi"] for q in captured] == [7.5, 6.5]
         assert all(q["moves"] == moves and q["rules"] == "chinese-ogs" and q["boardXSize"] == 19 for q in captured)
     asyncio.run(check())
+
+
+def test_parallel_analysis_matches_out_of_order_responses_to_the_right_game(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    monkeypatch.setenv("AI_CONCURRENCY", "4")
+
+    async def check():
+        engine = KataGo(tmp_path)
+        reader = asyncio.StreamReader()
+        queries = []
+
+        class Sink:
+            def write(self, data):
+                queries.append(json.loads(data))
+                if len(queries) == 4:
+                    for query in reversed(queries):
+                        response = {"id": query["id"], "moveInfos": [{"move": query["moves"][0][1]}]}
+                        reader.feed_data((json.dumps(response) + "\n").encode())
+
+            async def drain(self):
+                await asyncio.sleep(0)
+
+        engine.process = SimpleNamespace(returncode=None, stdin=Sink(), stdout=reader)
+        engine.reader = asyncio.create_task(engine._read())
+        settings = {"board_size": 19, "komi": 7.5, "rules": "chinese", "visits": 128}
+        moves = ["A1", "B1", "C1", "D1"]
+        results = await asyncio.gather(*(engine.analyze([["B", move]], settings) for move in moves))
+        assert [result["moveInfos"][0]["move"] for result in results] == moves
+        assert not engine.pending and engine.active == engine.waiting == 0
+        engine.process.returncode = 0
+        await engine.close()
+        assert not engine.status()["ready"]
+
+    asyncio.run(check())
