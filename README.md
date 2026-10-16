@@ -81,11 +81,11 @@ node scripts/browser-smoke.cjs
 
 現場伺服器可使用免安裝資料夾版，其他電腦仍用瀏覽器連線。雙擊啟動器、獨立資料目錄、10 分鐘自動備份、啟動前 WAL 完整備份和重複啟動保護已加入。詳見 [docs/本地執行檔.md](docs/本地執行檔.md)。
 
-Windows 使用者先登入 GitHub，從 [Build Windows test package → 最新成功紀錄 → Artifacts](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 下載 **`yanghai-windows-lan-v0.3.1`**。先解壓附件 ZIP，再完整解壓內層程式 ZIP。正式區網用 **`Start-LAN.cmd`**，離線雙人練習用 **`Start-Practice.cmd`**。Windows 建置流程須通過正式 LAN 與獨立練習檢查才提供附件；流程見 [主辦操作補充](docs/主辦操作補充.md) 及 [參賽者說明](docs/參賽者說明.md)。
+Windows 使用者先登入 GitHub，從 [Build Windows test package → 最新成功紀錄 → Artifacts](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 下載 **`yanghai-windows-lan-v0.3.2`**。先解壓附件 ZIP，再完整解壓內層程式 ZIP。正式區網用 **`Start-LAN.cmd`**，離線雙人練習用 **`Start-Practice.cmd`**。Windows 建置流程須通過正式 LAN 與獨立練習檢查才提供附件；流程見 [主辦操作補充](docs/主辦操作補充.md) 及 [參賽者說明](docs/參賽者說明.md)。
 
 ```bash
 uv sync --locked --group build
 .venv/bin/python scripts/build_portable.py --output dist/yanghai-linux-x64-new
 ```
 
-Windows 在 Windows x64 建置主機執行 `scripts/build-windows.cmd`；Linux 套件不能當作 Windows exe。發行包不包含賽事資料或金鑰；更新時保留現場 `tournament.json` 與 `data/`。
+Windows 在 Windows x64 建置主機執行 `scripts/build-windows.cmd`；Linux 套件不能當作 Windows exe。依主辦要求，空白賽事會自動建立內建的 18 隊名單，不用貼表格。發行包不包含實際對戰資料庫或金鑰；更新時保留現場 `tournament.json` 與 `data/`。詳見 [18 隊快速開賽](docs/18隊快速開賽.md)。

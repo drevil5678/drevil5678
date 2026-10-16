@@ -67,7 +67,7 @@ def main(archive,port):
             assert not (data/"tournament.sqlite3").exists(),"diagnostic altered tournament DB"
 
             def start():
-                return subprocess.Popen([str(executable),"--no-browser","--no-pause"],cwd=temp,env=environment,stdout=log,stderr=log)
+                return subprocess.Popen([str(executable),"--empty-roster","--no-browser","--no-pause"],cwd=temp,env=environment,stdout=log,stderr=log)
 
             process=start()
             try:

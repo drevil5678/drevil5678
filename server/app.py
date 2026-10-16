@@ -70,8 +70,9 @@ class CodeReset(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
-def create_app(runtime=None, engine=None, network=None):
+def create_app(runtime=None, engine=None, network=None, bootstrap=False):
     store = Store(runtime or os.getenv("TOURNAMENT_DATA", str(ROOT / ".runtime")))
+    initial_roster_loaded = store.prepare_initial_roster() if bootstrap else False
     state = store.state
     ai = engine or KataGo(store.runtime)
     lock = asyncio.Lock()
@@ -254,6 +255,7 @@ def create_app(runtime=None, engine=None, network=None):
 
     app = FastAPI(title="楊海分站賽", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.ai = store, ai
+    app.state.initial_roster_loaded = initial_roster_loaded
 
     @app.middleware("http")
     async def origin_guard(request: Request, call_next):
@@ -671,3 +673,8 @@ def create_app(runtime=None, engine=None, network=None):
 
     app.mount("/static", StaticFiles(directory=ROOT / "web"), name="static")
     return app
+
+
+def create_event_app():
+    """Source deployment entry point, matching the portable launcher's setup."""
+    return create_app(bootstrap=True)

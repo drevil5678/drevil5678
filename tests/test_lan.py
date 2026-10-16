@@ -92,9 +92,10 @@ def test_lan_mode_overrides_existing_loopback_config_without_rewriting(tmp_path,
     original = json.dumps({"host": "127.0.0.1", "port": port, "data_dir": "data", "open_browser": False})
     filename.write_text(original)
     captured = {}
-    def factory(directory, network):
+    def factory(directory, network, bootstrap):
         captured["network"] = network
-        return object()
+        captured["bootstrap"] = bootstrap
+        return SimpleNamespace(state=SimpleNamespace(initial_roster_loaded=False))
     class Server:
         def __init__(self, config):
             pass
@@ -105,4 +106,5 @@ def test_lan_mode_overrides_existing_loopback_config_without_rewriting(tmp_path,
     assert launcher.main(["--config", str(filename), "--lan", "--no-browser", "--no-pause"]) == 0
     assert captured["bound"] == ("0.0.0.0", port)
     assert captured["network"] == {"host": "0.0.0.0", "port": port}
+    assert captured["bootstrap"] is True
     assert filename.read_text() == original

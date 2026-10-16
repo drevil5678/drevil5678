@@ -2,7 +2,7 @@
 
 更新日期：2026-10-14。程式位於 `codex/yanghai-local-test`。新版為 **0.3.0 區域網路網頁版**，主辦主機啟動程式，其餘電腦以網址加入。
 
-[開啟 Windows 建置與下載頁](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml)。請先登入 GitHub，開啟最新一次成功的執行紀錄，再在 Artifacts 點選 `yanghai-windows-lan-v0.3.1`。
+[開啟 Windows 建置與下載頁](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml)。請先登入 GitHub，開啟最新一次成功的執行紀錄，再在 Artifacts 點選 `yanghai-windows-lan-v0.3.2`。
 
 `.github/workflows/windows-build.yml` 會在 `codex/yanghai-local-test` 分支更新時使用 Windows runner 執行，安裝鎖定依賴、跑測試、建置程式，再用真實 KataGo 診斷及封裝程式的區網 IP 執行 16 桌／50 個模擬客戶端測試。全部成功後才上傳 ZIP 與 SHA-256 摘要。
 
@@ -10,7 +10,7 @@
 
 1. 登入 GitHub，進入 `drevil5678/drevil5678` 儲存庫。
 2. 選取 **Actions → Build Windows test package**，開啟最新一次成功的執行紀錄。
-3. 在 **Artifacts** 區域點選 `yanghai-windows-lan-v0.3.1` 下載。若 Actions 被儲存庫設定停用，需要在 GitHub 啟用後重新執行。
+3. 在 **Artifacts** 區域點選 `yanghai-windows-lan-v0.3.2` 下載。若 Actions 被儲存庫設定停用，需要在 GitHub 啟用後重新執行。
 4. GitHub 下載的附件 ZIP 內含另一個程式 ZIP 及 `.sha256`。先解壓附件，再完整解壓程式 ZIP，找到 `YanghaiTournament.exe`。
 5. 保留執行檔旁的 `_internal`、`katago`、`model` 與 `config`，雙擊 **Start-LAN.cmd**。主機不用另裝 Python 或 uv，選手電腦不用安裝本程式。
 

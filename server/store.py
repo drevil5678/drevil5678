@@ -53,6 +53,21 @@ class Store:
             self.db.execute("INSERT OR REPLACE INTO state VALUES (1,?)", (json.dumps(self.state, ensure_ascii=False),))
         self.pending_events.clear()
 
+    def prepare_initial_roster(self):
+        """Seed an empty event once; never merge into or replace existing data."""
+        if self.state.get("initial_roster_version") or any(
+                self.state[key] for key in ("teams", "games", "rounds")):
+            return False
+        import time
+        from .initial_roster import ROSTER_VERSION, build_initial_teams
+        teams = build_initial_teams()
+        self.state["teams"] = teams
+        self.state["initial_roster_version"] = ROSTER_VERSION
+        self.record_event({"time": time.time(), "kind": "initial_roster",
+                           "detail": {"version": ROSTER_VERSION, "count": len(teams)}})
+        self.save()
+        return True
+
     def record_event(self, item):
         self.pending_events.append(item)
         self.state["events"].append(item)

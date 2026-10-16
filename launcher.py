@@ -156,6 +156,7 @@ def main(argv=None):
     mode.add_argument("--practice", action="store_true", help="離線單機雙人練習，使用獨立資料與本機連線")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--empty-roster", action="store_true", help="新資料庫不預載名單，供獨立測試；不刪除現有隊伍")
     parser.add_argument("--check", action="store_true", help="真實 AI 啟動診斷，不建立／更動賽事資料庫")
     parser.add_argument("--no-pause", action="store_true", help="錯誤時不等待 Enter，供自動化使用")
     args = parser.parse_args(argv)
@@ -227,7 +228,9 @@ def main(argv=None):
                 from server.practice import create_practice_app
                 application = create_practice_app(directory)
             else:
-                application = create_app(directory, network=binding)
+                application = create_app(directory, network=binding, bootstrap=not args.empty_roster)
+                if application.state.initial_roster_loaded:
+                    print("已建立內建的 18 隊名單及本機固定點棋碼。請登入主辦管理，列印隊伍碼並補齊資料與檢錄。")
             config = uvicorn.Config(application, host=host, port=port, workers=1, loop="asyncio", http="h11", ws="none", access_log=False)
             if not args.no_browser and settings["open_browser"]:
                 threading.Thread(target=browser_when_ready, args=(port, stop, binding["host"], "practice" if args.practice else "admin"), daemon=True).start()

@@ -38,7 +38,7 @@ def main(executable=None, port=8768):
         config = temp/"tournament.json"
         original = json.dumps(settings)
         config.write_text(original)
-        command += ["--config", str(config), "--lan", "--no-browser", "--no-pause"]
+        command += ["--config", str(config), "--lan", "--empty-roster", "--no-browser", "--no-pause"]
         environment = os.environ.copy()
         for name in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "AI_CONCURRENCY", "TOURNAMENT_DATA"):
             environment.pop(name, None)
