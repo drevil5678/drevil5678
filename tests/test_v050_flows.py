@@ -233,3 +233,35 @@ def test_special_tables_require_confirmed_rules_and_available_ai_without_creatin
         engine.failure = "controlled engine startup failure"
         assert client.post("/api/admin/special-tables", headers=admin, json=body).status_code == 503
         assert not app.state.store.state["rounds"] and not app.state.store.state["games"]
+
+
+def test_exact_tie_after_double_pass_requires_adjudication_and_cannot_resume(tmp_path):
+    with event(tmp_path, engine=OnlyPassEngine()) as (client, app, admin, teams):
+        settings = {**app.state.store.state["settings"], "komi": 0}
+        assert client.post("/api/admin/settings", headers=admin, json=settings).status_code == 200
+        assert client.post("/api/admin/rounds/swiss", headers=admin).status_code == 200
+        game = app.state.store.state["games"][0]
+        public = start(client, admin, game)
+        for color in ("B", "W"):
+            public = post(client, f"/api/games/{game['id']}/move", game["seats"][color]["token"],
+                          {"move": "pass", "version": public["version"]})
+            public = wait_status(client, game["id"], "playing" if color == "B" else "paused")
+        assert public["result"] is None
+        assert public["score"]["winner"] is None and public["score"]["margin"] == 0
+        assert public["score"]["black"] == public["score"]["white"] == 0
+        assert game["clock_started"] is None
+        assert all(row["score"] == 0 for row in client.get("/api/state").json()["standings"])
+        response = client.post(f"/api/admin/games/{game['id']}/action", headers=admin,
+                               json={"action": "resume"})
+        assert response.status_code == 409
+        assert client.get(f"/api/games/{game['id']}").json()["status"] == "paused"
+        response = client.post(f"/api/admin/games/{game['id']}/action", headers=admin,
+            json={"action": "adjudicate", "winner": game["seats"]["B"]["team"], "points": 1})
+        assert response.status_code == 200  # Referee reason remains optional.
+        finished = client.get(f"/api/games/{game['id']}").json()
+        assert finished["status"] == "finished"
+        assert finished["result"]["winner"] == game["seats"]["B"]["team"]
+        assert finished["result"]["points"] == 1
+        scores = {row["id"]: row["score"] for row in client.get("/api/state").json()["standings"]}
+        assert scores[game["seats"]["B"]["team"]] == 1
+        assert scores[game["seats"]["W"]["team"]] == 0
