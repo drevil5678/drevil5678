@@ -40,14 +40,15 @@ function pRender() {
   p$("practice-finish").disabled=!g||g.status==="finished"||practiceBusy;p$("practice-close").disabled=!g||practiceBusy;
   p$("practice-retry").classList.toggle("hidden",g?.status!=="error");p$("practice-retry").disabled=practiceBusy;
   p$("practice-sgf").classList.toggle("hidden",!g);if(g)p$("practice-sgf").href=pPath("sgf");
-  p$("practice-settings").querySelector("button").disabled=practiceBusy||!practiceBooted;p$("practice-table").disabled=practiceBusy;
+  p$("practice-settings").classList.toggle("hidden",practiceRooms.length>0);
+  p$("practice-settings").querySelector("button").disabled=practiceBusy||!practiceBooted||practiceRooms.length>0;p$("practice-table").disabled=true;
   p$("practice-hints").replaceChildren();if(g){if(g.error)p$("practice-hints").append(pNode("p",g.error));g.candidates.forEach((h,i)=>p$("practice-hints").append(pNode("div",`${h.move===g.forbidden?"✕ 禁止":"建議 "+(g.forbidden?i:i+1)}　${h.move}　${(h.winrate*100).toFixed(4)}%`,"hint-row"+(h.move===g.forbidden?" forbidden":""))));}
   const result=g?.result;let resultText="";if(result){const winner=result.winner==="B"?"黑棋獲勝":result.winner==="W"?"白棋獲勝":"平手";if(result.score)resultText=`${winner} · 黑 ${result.score.black}／白 ${result.score.white}，差 ${result.score.margin}。依棋盤現況計分，未另移除死子。`;else resultText=result.reason==="resign"?winner+"（認輸）":"本局已結束，可下載棋譜或收桌。";}
   p$("practice-result").textContent=resultText;pDraw();
 }
 async function pList(epoch=practiceEpoch) {
   const data=await pApi(practiceBase);if(epoch!==practiceEpoch)return false;practiceBooted=true;practiceRooms=data.rooms;
-  p$("practice-capacity").textContent=`目前全場 ${data.tables}／${data.max_tables} 桌 · 這個瀏覽器 ${data.rooms.length} 桌`;
+  p$("practice-capacity").textContent=data.rooms.length?"你的練習桌已開啟。可繼續對弈；要開新局，請先收桌。":"每個瀏覽器可開一桌練習。選擇下方設定，開始新的一局。";
   const select=p$("practice-table");select.replaceChildren();if(!data.rooms.length){const empty=pNode("option","尚未開桌");empty.value="";select.append(empty);}
   for(const room of data.rooms){const option=pNode("option",`${room.name} · ${room.mode==="ai"?"人對電腦":"同機雙人"} · ${room.moves} 手`);option.value=room.id;select.append(option);}
   if(!data.rooms.some(r=>r.id===practiceTableId)){practiceTableId=data.rooms[0]?.id||"";pSetGame(null);practiceTableId=data.rooms[0]?.id||"";}

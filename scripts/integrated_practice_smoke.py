@@ -1,5 +1,6 @@
 """Check same-port, same-browser practice with real AI in source or Windows builds."""
 import argparse
+from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
@@ -96,7 +97,7 @@ def main(executable=None, port=None):
             process = subprocess.Popen(command, cwd=temp, env=environment, stdout=log, stderr=log)
             try:
                 url = f"http://127.0.0.1:{port}"
-                with httpx.Client(base_url=url, trust_env=False, timeout=10) as client, \
+                with ExitStack() as contexts, httpx.Client(base_url=url, trust_env=False, timeout=10) as client, \
                         httpx.Client(base_url=url, trust_env=False, timeout=10) as foreign:
                     deadline = time.monotonic() + 60
                     while time.monotonic() < deadline:
@@ -187,6 +188,8 @@ def main(executable=None, port=None):
                     assert game["result"]["reason"] == "double_pass" and game["result"]["winner"] == "W"
                     assert game["result"]["score"]["black"] == 0 and game["result"]["score"]["white"] == 7.5
                     assert "KM[7.5]" in client.get(endpoint(local_room, "sgf")).text
+                    assert client.post(BASE, json={}).status_code == 409
+                    close(local_room)
 
                     computer = create(mode="ai", human_color="W")
                     game = ready(computer, 1)
@@ -207,7 +210,7 @@ def main(executable=None, port=None):
                     assert foreign.post(endpoint(computer, "finish"), json={"version": game["version"]}).status_code == 404
                     stranger = create(foreign, mode="local")
                     own = client.get(BASE).json()
-                    assert len(own["rooms"]) == 2 and own["tables"] == 3
+                    assert len(own["rooms"]) == 1 and own["tables"] == 2
                     assert stranger["game"]["id"] not in {r["id"] for r in own["rooms"]}
                     # Even copying the HttpOnly cookie cannot admit a different source IP.
                     address = network["interfaces"][0]["address"]
@@ -216,14 +219,24 @@ def main(executable=None, port=None):
                         response = another_computer.get(f"http://{address}:{port}" + endpoint(computer), headers={"Cookie": cookies})
                         assert response.status_code == 404, "different source IP admitted with copied browser cookie"
 
-                    # Concurrent creates test the global cap rather than a per-browser limit.
+                    # Repeated requests/tabs cannot bypass the one-browser-one-table rule.
                     with ThreadPoolExecutor(max_workers=8) as executor:
-                        attempts = list(executor.map(lambda _: client.post(BASE, json={"board_size": 9}), range(20)))
-                    assert [r.status_code for r in attempts].count(200) == 12
-                    assert [r.status_code for r in attempts].count(429) == 8
-                    waiting = [r.json() for r in attempts if r.status_code == 200]
+                        duplicates = list(executor.map(lambda _: client.post(BASE, json={}), range(20)))
+                    assert all(r.status_code == 409 for r in duplicates)
+                    assert len(client.get(BASE).json()["rooms"]) == 1
+                    # Capacity remains protected across distinct browsers, without a public numeric message.
+                    browsers = [contexts.enter_context(httpx.Client(base_url=url, trust_env=False, timeout=10)) for _ in range(20)]
+                    for browser in browsers:
+                        browser.get(BASE)
+                    with ThreadPoolExecutor(max_workers=8) as executor:
+                        attempts = list(executor.map(lambda browser: browser.post(BASE, json={"board_size": 9}), browsers))
+                    assert [r.status_code for r in attempts].count(200) == 13
+                    assert [r.status_code for r in attempts].count(429) == 7
+                    assert all("15" not in r.text for r in attempts if r.status_code == 429)
+                    waiting = [(browser, r.json()) for browser, r in zip(browsers, attempts) if r.status_code == 200]
+                    available_browser = next(browser for browser, r in zip(browsers, attempts) if r.status_code == 429)
                     assert client.get(BASE).json()["tables"] == 15
-                    assert foreign.post(BASE, json={}).status_code == 429
+                    assert foreign.post(BASE, json={}).status_code == 409
 
                     def isolated_browser(_):
                         with httpx.Client(base_url=url, trust_env=False, timeout=10) as browser:
@@ -235,11 +248,13 @@ def main(executable=None, port=None):
                     with ThreadPoolExecutor(max_workers=10) as executor:
                         assert all(executor.map(isolated_browser, range(50)))
                     assert listener_ports(process) == {port}, "practice opened another listening port"
-                    close(waiting.pop())
-                    replacement = create(name="收桌名額回收")
+                    released_browser, released_room = waiting.pop()
+                    close(released_room, released_browser)
+                    replacement = create(available_browser, name="收桌名額回收")
                     assert client.get(BASE).json()["tables"] == 15
-                    for room in [local_room, computer, *waiting, replacement]:
-                        close(room)
+                    close(computer)
+                    for browser, room in [*waiting, (available_browser, replacement)]:
+                        close(room, browser)
                     close(stranger, foreign)
                     assert client.get(BASE).json()["tables"] == 0
                     assert client.get("/api/admin/state", headers=admin).json() == formal_before, "practice changed formal tournament state"
@@ -251,6 +266,7 @@ def main(executable=None, port=None):
                     "passed": True, "real_ai": True, "same_port": port, "second_port_8001": False,
                     "shared_formal_and_practice_routes": True, "max_tables": 15,
                     "concurrent_global_capacity_verified": True, "slot_release_verified": True,
+                    "one_table_per_browser_atomic": True,
                     "same_computer_two_human": True, "automatic_computer_moves_and_undo": True,
                     "double_pass_current_board_score": True, "visible_move_count_api": True,
                     "httponly_cookie_and_source_ip_bound": True, "own_tables_only": True,

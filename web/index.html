@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>楊海分站賽 · 火星人試驗</title>
     <link rel="stylesheet" href="/static/style.css" />
+    <script defer src="/static/dice-stage.js"></script>
     <script defer src="/static/app.js"></script>
   </head>
   <body>
@@ -47,6 +48,7 @@
         <p class="eyebrow">PLAYOFF BRACKET</p>
         <h1>淘汰賽對決圖</h1>
         <p id="bracket-description">瑞士制五輪結束後公布八強對戰；後續晉級隊伍於結果確定後顯示。</p>
+        <p class="champion-prize">冠軍獎金 NT$20,000</p>
         <div id="bracket-champion"></div>
         <div id="bracket-tree" class="bracket-tree" aria-live="polite"></div>
       </section>
@@ -224,7 +226,7 @@
               <li>
                 開賽前決定是否參考自備設備。一般賽局每方 10 分鐘，使用自備設備為 5 分鐘；冠軍戰為 15 分鐘，使用自備設備為 10 分鐘。
               </li>
-              <li>主辦方開放開賽後，雙方各擲兩顆骰子，比總點數；同點重擲。較高的一隊選擇黑或白，雙方按「準備好了」後開始對弈。</li>
+              <li>主辦方開放開賽後，雙方各擲兩顆骰子。在棋盤中央看完動畫，按「確定」確認點數，再比總點數；同點重擲。較高的一隊選擇黑或白，雙方按「準備好了」後開始對弈。</li>
               <li>
                 紅色叉號是 AI 最高勝率落點，禁止落子；綠色數字是其他 AI
                 建議。也可選擇未標記的合法落點。
@@ -251,7 +253,7 @@
           <article class="panel">
             <h2>自由練習</h2>
             <p>點上方「練習」，可在同一台電腦由兩人輪流落子，或選擇與電腦對戰。不支援跨電腦連線到同一棋局，不需要正式賽點棋碼。</p>
-            <p>全場練習最多 15 桌；練習無計時、不計正式成績，勝率已計入本局貼目。結束後先下載 SGF 再收桌；30 分鐘無操作會自動收桌。</p>
+            <p>每個瀏覽器只開一桌練習，重新整理或開新分頁會回到原桌。練習無計時、不計正式成績，勝率已計入本局貼目。結束後先下載 SGF 再收桌；30 分鐘無操作會自動收桌。</p>
           </article>
         </div>
       </section>
@@ -266,6 +268,7 @@
               height="740"
               aria-label="圍棋棋盤"
             ></canvas>
+            <div id="dice-stage" class="dice-stage hidden" role="dialog" aria-modal="false" aria-labelledby="dice-stage-title" tabindex="-1"></div>
           </div>
           <aside>
             <p id="move-number" class="move-number" aria-live="polite">已落 0 手 · 輪到第 1 手</p>

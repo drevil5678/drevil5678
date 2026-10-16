@@ -1,7 +1,7 @@
-# 從 GitHub 下載 Windows v0.5.0
+# 從 GitHub 下載 Windows v0.5.1
 
 1. 登入 GitHub，開啟 [Build Windows test package](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml)。
-2. 選擇最新一次成功的執行紀錄，在 **Artifacts** 點 `yanghai-windows-lan-v0.5.0`。
+2. 選擇最新一次成功的執行紀錄，在 **Artifacts** 點 `yanghai-windows-lan-v0.5.1`。
 3. 先解壓附件 ZIP，再完整解壓裡面的程式 ZIP；保留所有資料夾，雙擊 **Start-LAN.cmd**。
 4. 以本機 `data/admin-token` 登入管理頁，複製參賽網址。18 隊已預載並完成檢錄，規則確認後即可建立首輪；雙方骰子猜先並準備後開局。
 

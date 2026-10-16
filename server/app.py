@@ -106,6 +106,8 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             ids = [s["team"] for s in game["seats"].values()]
             game["pregame"] = {"armed": False, "attempt": 1, "rolls": {}, "history": [],
                                "winner": None, "color_choice": None, "ready": {tid: False for tid in ids}}
+        if "id" not in game["pregame"]:
+            game["pregame"]["id"] = uuid.uuid4().hex[:12]
         return game["pregame"]
 
     # Add new fields without replaying or discarding an existing game.

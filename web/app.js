@@ -25,6 +25,7 @@ let snapshot,
   currentView = "arena";
 let networkState;
 let bracketState, rollingTeam = null, pregameBusy = false;
+const diceStage = new DiceStage(() => renderPregame());
 let selectedRecordTeam = sessionStorage.getItem("teamId") || null;
 let adminToken = sessionStorage.getItem("adminToken") || "",
   seatToken = "",
@@ -88,6 +89,7 @@ function showView(view) {
     .querySelectorAll("nav button")
     .forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   if (view !== "match") {
+    diceStage.clear();
     selectedGame = null;
     currentGame = null;
     location.hash = view;
@@ -203,11 +205,12 @@ async function refreshBracket() {
   if (JSON.stringify(data) === JSON.stringify(bracketState)) return;
   bracketState = data;
   $("bracket-champion").replaceChildren();
-  if (data.champion) $("bracket-champion").append(el("p", `冠軍：${data.champion.name}`, "champion-banner"));
+  if (data.champion) $("bracket-champion").append(el("p", `冠軍：${data.champion.name} · 獎金 NT$20,000`, "champion-banner"));
   $("bracket-tree").replaceChildren();
   for (const stage of data.stages) {
     const column = el("div", undefined, "bracket-column");
     column.append(el("h2", stage.label));
+    if (stage.stage === "final") column.append(el("p", "冠軍獎金 NT$20,000", "bracket-prize"));
     const matches = el("div", undefined, "bracket-matches");
     for (const match of stage.matches) {
       const card = el("article", undefined, "bracket-match" + (match.winner ? " complete" : ""));
@@ -280,6 +283,7 @@ async function refreshRecords() {
   }
 }
 async function openGame(id) {
+  diceStage.clear();
   selectedGame = id;
   seatColor = null;
   seatTeam = null;
@@ -371,12 +375,16 @@ async function pregameAction(action, body) {
   if (pregameBusy || !currentGame || !seatTeam) return;
   const gameId = selectedGame, attempt = currentGame.pregame.attempt;
   pregameBusy = true;
-  if (action === "dice") rollingTeam = seatTeam;
+  if (action === "dice") {
+    rollingTeam = seatTeam;
+    diceStage.begin(currentGame, seatTeam);
+  }
   renderPregame();
   try {
-    const request = api(`/api/games/${gameId}/${action}`, { method: "POST", token: seatToken, body: { ...body, attempt } });
-    if (action === "dice") await Promise.all([request, new Promise(resolve => setTimeout(resolve, 700))]);
-    else await request;
+    await api(`/api/games/${gameId}/${action}`, { method: "POST", token: seatToken, body: { ...body, attempt } });
+  } catch (error) {
+    if (selectedGame === gameId) diceStage.clear();
+    throw error;
   } finally {
     pregameBusy = false;
     rollingTeam = null;
@@ -385,6 +393,7 @@ async function pregameAction(action, body) {
 }
 function renderPregame() {
   const g = currentGame, panel = $("pregame-panel"), p = g?.pregame;
+  const pendingDice = diceStage.update(g, seatTeam);
   panel.classList.toggle("hidden", !p || g.status !== "ready");
   if (!p || g.status !== "ready") return;
   panel.replaceChildren(el("h2", "猜先與賽前準備"));
@@ -392,16 +401,17 @@ function renderPregame() {
   for (const color of ["B", "W"]) {
     const team = g.seats[color], roll = p.rolls?.[team.team], row = el("div", undefined, "dice-team");
     row.append(el("strong", team.name));
-    const faces = el("span", rollingTeam === team.team ? "🎲 🎲" : roll ? roll.map(die => diceFaces[die]).join(" ") : "□ □", "dice-faces" + (rollingTeam === team.team ? " rolling" : ""));
-    faces.setAttribute("aria-label", roll ? `${roll[0]} 加 ${roll[1]}，共 ${roll[0] + roll[1]} 點` : "尚未擲骰");
-    row.append(faces, el("span", roll ? `${roll[0]} + ${roll[1]} = ${roll[0] + roll[1]} 點` : "尚未擲骰"));
+    const confirmed = !seatTeam || diceStage.confirmed(p.attempt, team.team, roll);
+    const faces = el("span", confirmed && roll ? roll.map(die => diceFaces[die]).join(" ") : "□ □", "dice-faces");
+    faces.setAttribute("aria-label", confirmed && roll ? `${roll[0]} 加 ${roll[1]}，共 ${roll[0] + roll[1]} 點` : "尚未確認點數");
+    row.append(faces, el("span", roll ? confirmed ? `${roll[0]} + ${roll[1]} = ${roll[0] + roll[1]} 點` : "請確認棋盤中央的擲骰結果" : rollingTeam === team.team ? "擲骰中…" : "尚未擲骰"));
     panel.append(row);
   }
   const ties = (p.history || []).filter(round => round.tie);
   if (ties.length) {
     const history = el("details"); history.append(el("summary", `同點重擲 ${ties.length} 次，查看紀錄`));
     for (const round of ties) {
-      const rolls = Object.entries(round.rolls).map(([id, values]) => `${Object.values(g.seats).find(seat => seat.team === id)?.name || "隊伍"} ${values.join("+")}=${values[0] + values[1]}`);
+      const rolls = Object.entries(round.rolls).map(([id, values]) => `${Object.values(g.seats).find(seat => seat.team === id)?.name || "隊伍"} ${!seatTeam || diceStage.confirmed(round.attempt, id, values) ? `${values.join("+")}=${values[0] + values[1]}` : "等待確認擲骰結果"}`);
       history.append(el("p", `第 ${round.attempt} 次：${rolls.join("；")}，同點。`));
     }
     panel.append(history);
@@ -410,11 +420,11 @@ function renderPregame() {
   if (seatTeam && !p.winner && !p.rolls?.[seatTeam]) {
     const roll = button(rollingTeam ? "擲骰中…" : "擲兩顆骰子", () => pregameAction("dice", {}));
     roll.id = "roll-dice";
-    roll.disabled = !p.armed || pregameBusy;
+    roll.disabled = !p.armed || pregameBusy || pendingDice;
     panel.append(roll);
   }
   if (seatTeam && p.rolls?.[seatTeam] && !p.winner) panel.append(el("p", "已擲骰，等待對手。"));
-  if (p.winner) {
+  if (p.winner && !pendingDice) {
     const winner = Object.values(g.seats).find(team => team.team === p.winner);
     panel.append(el("p", `${winner?.name || "較高點數隊伍"} 點數較高，可選擇黑棋或白棋。`, "dice-winner"));
     if (!p.color_choice && seatTeam === p.winner) {

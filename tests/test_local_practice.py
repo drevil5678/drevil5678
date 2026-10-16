@@ -1,7 +1,7 @@
 """Exercise practice rooms as private same-computer sessions on the main server."""
 import time
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import ExitStack, asynccontextmanager, contextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -96,24 +96,47 @@ def test_bootstrap_private_cookie_ip_binding_and_no_remote_join():
         assert "owner" not in listing and "cookie" not in listing
 
 
-def test_atomic_global_fifteen_table_cap_and_finished_rooms_retain_capacity():
-    with practice() as (client, _):
+def test_same_browser_can_only_create_one_table_even_concurrently_or_after_finish():
+    with practice() as (client, app):
         client.get("/api/local-practice/rooms")
         with ThreadPoolExecutor(max_workers=8) as executor:
             responses = list(executor.map(lambda _: client.post("/api/local-practice/rooms", json={"board_size": 9}), range(24)))
-        assert [r.status_code for r in responses].count(200) == 15
-        assert [r.status_code for r in responses].count(429) == 9
+        assert [r.status_code for r in responses].count(200) == 1
+        assert [r.status_code for r in responses].count(409) == 23
         listing = client.get("/api/local-practice/rooms").json()
-        assert listing["tables"] == listing["max_tables"] == len(listing["rooms"]) == 15
+        assert listing["tables"] == len(listing["rooms"]) == 1
         first = next(r.json() for r in responses if r.status_code == 200)
+        with other_browser(app, client) as another_tab:
+            another_tab.cookies.update(client.cookies)
+            assert another_tab.get("/api/local-practice/rooms").json()["rooms"][0]["id"] == first["game"]["id"]
+            assert another_tab.post("/api/local-practice/rooms", json={}).status_code == 409
         game = ready(client, first)
         game = client.post(endpoint(first, "finish"), json={"version": game["version"]}).json()["game"]
         assert game["status"] == "finished"
-        assert client.post("/api/local-practice/rooms", json={}).status_code == 429
+        assert client.post("/api/local-practice/rooms", json={}).status_code == 409
         assert client.request("DELETE", endpoint(first), json={"version": game["version"]}).status_code == 200
         assert client.get(endpoint(first)).status_code == 404
         assert create(client)["game"]["id"] != first["game"]["id"]
+        assert client.get("/api/local-practice/rooms").json()["tables"] == 1
+
+
+def test_global_capacity_is_atomic_across_distinct_browsers_without_exposing_limit_in_errors():
+    with practice() as (client, app), ExitStack() as contexts:
+        browsers = [client] + [contexts.enter_context(other_browser(app, client)) for _ in range(19)]
+        for browser in browsers:
+            browser.get("/api/local-practice/rooms")
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            responses = list(executor.map(lambda browser: browser.post("/api/local-practice/rooms", json={"board_size": 9}), browsers))
+        assert [r.status_code for r in responses].count(200) == 15
+        assert [r.status_code for r in responses].count(429) == 5
+        assert all("15" not in r.text for r in responses if r.status_code == 429)
         assert client.get("/api/local-practice/rooms").json()["tables"] == 15
+        owner_index = next(i for i, r in enumerate(responses) if r.status_code == 200)
+        owner, room = browsers[owner_index], responses[owner_index].json()
+        game = ready(owner, room)
+        assert owner.request("DELETE", endpoint(room), json={"version": game["version"]}).status_code == 200
+        waiting_index = next(i for i, r in enumerate(responses) if r.status_code == 429)
+        assert create(browsers[waiting_index])["game"]["id"] != room["game"]["id"]
 
 
 def test_same_computer_alternation_forbidden_stale_undo_and_sgf():
@@ -159,6 +182,7 @@ def test_computer_black_or_white_and_undo_returns_same_human_turn():
             assert client.post(endpoint(room, "undo"), json={"version": game["version"]}).status_code == 200
             game = ready(client, room, moves=0 if color == "B" else 1)
             assert game["turn"] == color
+            assert client.request("DELETE", endpoint(room), json={"version": game["version"]}).status_code == 200
 
 
 def test_ai_failure_retry_preserves_accepted_move_and_double_pass_scores_board():

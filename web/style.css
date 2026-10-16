@@ -330,10 +330,96 @@ th {
   .dice-faces.rolling { animation: none; }
 }
 .board-wrap {
+  position: relative;
   padding: 16px;
   background: #dcc291;
   border-radius: 8px;
   align-self: start;
+}
+.champion-prize, .bracket-prize {
+  color: #84601e;
+  font-weight: 700;
+  background: #faf0d7;
+  border: 1px solid #e9d49c;
+  border-radius: 8px;
+  padding: 12px 18px;
+}
+.bracket-prize { margin: 0 0 18px; text-align: center; font-size: 15px; }
+.dice-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: inherit;
+  background: #122e29d9;
+  backdrop-filter: blur(5px);
+  outline-offset: -4px;
+}
+.dice-stage-card {
+  width: 100%;
+  max-width: 650px;
+  max-height: 100%;
+  overflow: auto;
+  padding: clamp(12px, 2.5vw, 30px);
+  border: 1px solid #eadab5;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at top, #fffef8, #f6ebd7);
+  box-shadow: 0 25px 80px #0005;
+  text-align: center;
+  animation: dice-arrive .35s ease-out both;
+}
+.dice-stage-kicker { margin: 0 0 8px; font-size: 11px; letter-spacing: .15em; color: #86632f; }
+.dice-stage-card h2 { margin: 0 0 24px; font-size: clamp(20px, 2.3vw, 32px); }
+.dice-stage-teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(12px, 2vw, 24px); }
+.dice-stage-team { min-width: 0; }
+.dice-stage-name { display: block; overflow-wrap: anywhere; font-size: clamp(12px, 1.3vw, 17px); min-height: 2.6em; line-height: 1.3; }
+.dice-pair { display: flex; justify-content: center; gap: clamp(12px, 1.5vw, 22px); perspective: 800px; padding: 22px 0 16px; }
+.die-flight { --die-size: clamp(44px, 6.5vw, 88px); width: var(--die-size); height: var(--die-size); flex: 0 0 auto; }
+.die-cube { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .65s cubic-bezier(.18,.8,.25,1); }
+.die-face, .die-waiting { position: absolute; inset: 0; border: 1px solid #c6b894; border-radius: 14%; background: #fffdf6; box-shadow: inset 0 0 12px #cabb9838; }
+.die-face { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 15%; gap: 8%; backface-visibility: hidden; }
+.die-face.face-1 { transform: translateZ(calc(var(--die-size) / 2)); }
+.die-face.face-2 { transform: rotateX(90deg) translateZ(calc(var(--die-size) / 2)); }
+.die-face.face-3 { transform: rotateY(90deg) translateZ(calc(var(--die-size) / 2)); }
+.die-face.face-4 { transform: rotateY(-90deg) translateZ(calc(var(--die-size) / 2)); }
+.die-face.face-5 { transform: rotateX(-90deg) translateZ(calc(var(--die-size) / 2)); }
+.die-face.face-6 { transform: rotateY(180deg) translateZ(calc(var(--die-size) / 2)); }
+.die-pip { display: block; border-radius: 50%; background: #173f35; box-shadow: inset 0 1px 2px #0005; }
+.face-1 .die-pip { background: #af4237; }
+.pip-1 { grid-area: 1 / 1; }.pip-3 { grid-area: 1 / 3; }
+.pip-4 { grid-area: 2 / 1; }.pip-5 { grid-area: 2 / 2; }.pip-6 { grid-area: 2 / 3; }
+.pip-7 { grid-area: 3 / 1; }.pip-9 { grid-area: 3 / 3; }
+.die-cube[data-value="1"] { transform: rotateX(0deg) rotateY(0deg); }
+.die-cube[data-value="2"] { transform: rotateX(-90deg); }
+.die-cube[data-value="3"] { transform: rotateY(-90deg); }
+.die-cube[data-value="4"] { transform: rotateY(90deg); }
+.die-cube[data-value="5"] { transform: rotateX(90deg); }
+.die-cube[data-value="6"] { transform: rotateY(180deg); }
+.die-waiting { position: relative; width: 100%; height: 100%; display: grid; place-items: center; font-size: 28px; color: #afaa98; opacity: .6; }
+.die-flight.is-rolling { animation: dice-bounce .65s ease-in-out infinite alternate; }
+.die-flight.is-rolling .die-cube { animation: dice-tumble 1.25s cubic-bezier(.4,.1,.5,1) infinite; }
+.die-flight[data-index="1"].is-rolling { animation-delay: -.23s; }
+.die-flight[data-index="1"].is-rolling .die-cube { animation-direction: reverse; animation-delay: -.4s; }
+.dice-stage-total { margin: 10px 0 0; font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; font-size: clamp(13px, 1.6vw, 22px); }
+.dice-stage-summary { min-height: 1.5em; margin: 24px 0 14px; font-size: clamp(12px, 1.2vw, 15px); overflow-wrap: anywhere; }
+.dice-confirm { min-width: 150px; font-size: 17px; padding: 12px 30px; }
+@keyframes dice-arrive { from { opacity: 0; transform: translateY(20px) scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes dice-tumble { from { transform: rotateX(15deg) rotateY(25deg) rotateZ(0); } to { transform: rotateX(735deg) rotateY(1105deg) rotateZ(180deg); } }
+@keyframes dice-bounce { from { transform: translateY(-12px) rotate(-9deg); } to { transform: translateY(6px) rotate(8deg); } }
+@media (max-width: 600px) {
+  .dice-stage { padding: 8px; }
+  .dice-stage-kicker { font-size: 9px; margin-bottom: 4px; }
+  .dice-stage-card h2 { margin-bottom: 10px; }
+  .dice-pair { padding: 14px 0 8px; }
+  .dice-stage-summary { margin: 12px 0 8px; }
+  .dice-confirm { padding: 8px 22px; font-size: 15px; min-width: 120px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dice-stage-card, .die-flight.is-rolling, .die-flight.is-rolling .die-cube { animation: none; }
+  .die-cube { transition: none; }
 }
 canvas {
   width: 100%;

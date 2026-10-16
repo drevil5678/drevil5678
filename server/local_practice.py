@@ -271,8 +271,10 @@ def install_local_practice(app: FastAPI, ai, root, clock=time.time):
             raise HTTPException(503, "練習 AI 尚未就緒，請稍後再試")
         async with manager.registry:
             manager.purge()
+            if any(room["owner"] == token for room in manager.rooms.values()):
+                raise HTTPException(409, "這個瀏覽器已有一桌練習，請繼續原桌，或先收桌再開新局")
             if len(manager.rooms) >= MAX_TABLES:
-                raise HTTPException(429, "目前 15 桌已滿，請等其他玩家收桌後再開桌")
+                raise HTTPException(429, "目前練習暫時額滿，請稍後再試")
             board = "." * body.board_size ** 2
             room = {"id": uuid.uuid4().hex, "name": body.name.strip(), "owner": token, "host": manager.peer(request),
                     "mode": body.mode, "human_color": body.human_color,

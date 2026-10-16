@@ -155,7 +155,7 @@ def main(argv=None):
     mode.add_argument("--host", help="覆寫本次監聽位址，不修改設定檔")
     mode.add_argument("--lan", action="store_true", help="啟動區域網路網頁版，讓選手用瀏覽器加入")
     mode.add_argument("--practice", action="store_true", help="離線單機雙人練習，使用獨立資料與本機連線")
-    mode.add_argument("--practice-lan", action="store_true", help="開啟主站同埠練習分頁，最多 15 桌，同機雙人或對電腦")
+    mode.add_argument("--practice-lan", action="store_true", help="開啟主站同埠練習分頁，每個瀏覽器一桌，同機雙人或對電腦")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--empty-roster", action="store_true", help="新資料庫不預載名單，供獨立測試；不刪除現有隊伍")
