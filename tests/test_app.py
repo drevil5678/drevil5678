@@ -69,9 +69,39 @@ def wait_status(client, gid, expected="playing"):
     raise AssertionError(f"Expected {expected}, got {g}")
 
 
-def start(client, header, g):
-    assert client.post(f"/api/admin/games/{g['id']}/action", headers=header, json={"action":"start"}).status_code == 200
-    return wait_status(client, g["id"])
+def start(client, header, g, *, wait=True, before_ready=None):
+    """Arm a game, complete both dice rolls and ready checks, preserve fixture colors."""
+    black_team = g["seats"]["B"]["team"]
+    credentials = {seat["team"]: seat["token"] for seat in g["seats"].values()}
+    assert client.post(f"/api/admin/games/{g['id']}/action", headers=header,
+                       json={"action": "start"}).status_code == 200
+    for _ in range(50):
+        public = client.get(f"/api/games/{g['id']}").json()
+        pregame = public["pregame"]
+        attempt = pregame["attempt"]
+        for team, code in credentials.items():
+            if team not in pregame["rolls"]:
+                response = client.post(f"/api/games/{g['id']}/dice",
+                    headers={"Authorization": "Bearer " + code}, json={"attempt": attempt})
+                assert response.status_code == 200, response.text
+        public = client.get(f"/api/games/{g['id']}").json()
+        if public["pregame"]["winner"]:
+            break
+    else:
+        raise AssertionError("Dice did not produce a non-tied result")
+    pregame = public["pregame"]
+    response = client.post(f"/api/games/{g['id']}/color",
+        headers={"Authorization": "Bearer " + credentials[pregame["winner"]]},
+        json={"color": "B" if pregame["winner"] == black_team else "W", "attempt": pregame["attempt"]})
+    assert response.status_code == 200, response.text
+    if before_ready:
+        before_ready()
+    for code in credentials.values():
+        response = client.post(f"/api/games/{g['id']}/ready",
+            headers={"Authorization": "Bearer " + code},
+            json={"ready": True, "attempt": pregame["attempt"]})
+        assert response.status_code == 200, response.text
+    return wait_status(client, g["id"]) if wait else client.get(f"/api/games/{g['id']}").json()
 
 
 def submit_second(client, g, public):
@@ -149,8 +179,8 @@ def test_above_threshold_resets_and_resume_does_not_count_twice(prepared):
 def test_timeout_scoring_and_system_pause(prepared):
     client, app, engine, header, g = prepared
     engine.delay = .1
+    start(client, header, g, wait=False)
     g["remaining"]["B"] = .03
-    client.post(f"/api/admin/games/{g['id']}/action", headers=header, json={"action":"start"})
     time.sleep(.05)
     public = client.get(f"/api/games/{g['id']}").json()
     assert public["status"] == "analyzing" and public["remaining"]["B"] == .03
@@ -161,7 +191,7 @@ def test_timeout_scoring_and_system_pause(prepared):
 def test_referee_pause_race_archival_and_backup(prepared):
     client, app, engine, header, g = prepared
     engine.delay = .1
-    client.post(f"/api/admin/games/{g['id']}/action",headers=header,json={"action":"start"})
+    start(client, header, g, wait=False)
     client.post(f"/api/admin/games/{g['id']}/action",headers=header,json={"action":"pause","reason":"測試暫停"})
     time.sleep(.2)
     assert client.get(f"/api/games/{g['id']}").json()["status"] == "paused"
@@ -179,7 +209,10 @@ def test_restart_recovers_paused_without_charging_downtime(tmp_path):
     with TestClient(app) as client:
         state = app.state.store.state
         state["teams"] = [{"id":"a","name":"甲隊"},{"id":"b","name":"乙隊"}]
-        state["games"] = [{"id":"test","status":"playing","clock_started":time.time()-100,
+        state["games"] = [{"id":"test", "stage":"swiss",
+            "seats":{"B":{"team":"a", "token":"old-black", "own_device":False},
+                     "W":{"team":"b", "token":"old-white", "own_device":False}},
+            "status":"playing","clock_started":time.time()-100,
             "generation":1,"version":1,"remaining":{"B":120,"W":300},"turn":"B"}]
         # A restart test persists state directly; prevent normal shutdown settling.
         state["games"][0]["status"] = "paused"

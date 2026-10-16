@@ -1,9 +1,8 @@
-"""Organizer-requested opening roster. Credentials are generated on each host."""
+"""Organizer-requested roster and deliberately pre-issued, printable codes."""
 import uuid
 
-from .credentials import new_team_code
-
-ROSTER_VERSION = "yanghai-18-v1"
+ROSTER_VERSION = "yanghai-18-v2-static"
+RULE_VERSION = "v0.5.0"
 # Registration order is the order supplied by the organizer. Keep letter case
 # and supplementary Unicode characters exactly as supplied.
 INITIAL_ROSTER = (
@@ -27,12 +26,23 @@ INITIAL_ROSTER = (
     ("林恩洋", "黃晨軒", "火星衝衝衝"),
 )
 
+# The organizer explicitly chose fixed codes so printed cards work on every
+# fresh event installation. These credentials are intentionally public.
+INITIAL_CODES = (
+    "J9Y2-L4DG-JF7L", "WBRN-K9WJ-BC7Y", "9LWY-RWFC-6ZLH",
+    "BA29-VP7J-T7WE", "YFRG-ZZLA-VR8X", "EZ5E-4J5U-W96H",
+    "SF5L-WHKH-U4EL", "DSHD-9645-RBM3", "HX3W-ZC4C-PP7J",
+    "4GM3-MNA6-44MG", "Q7F4-PA79-B34E", "SKRD-XV77-QHMA",
+    "JCJN-SYHR-8GD4", "YV84-4CE8-LQQX", "8ZEJ-4H4B-FMZJ",
+    "AU3K-8ZZQ-XRZE", "WGBD-ZWQL-E34X", "D78K-64PG-S73S",
+)
+
 
 def build_initial_teams():
     teams = []
-    for order, (captain, member, name) in enumerate(INITIAL_ROSTER, 1):
+    for order, ((captain, member, name), code) in enumerate(zip(INITIAL_ROSTER, INITIAL_CODES), 1):
         teams.append({"id": uuid.uuid4().hex[:12], "name": name,
                       "players": [captain, member], "mars_points": [0, 0],
-                      "checked_in": False, "eligibility_checked": False, "order": order,
-                      "play_code": new_team_code(t["play_code"] for t in teams)})
+                      "checked_in": True, "eligibility_checked": True, "order": order,
+                      "play_code": code})
     return teams

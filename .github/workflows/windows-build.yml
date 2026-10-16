@@ -30,30 +30,33 @@ jobs:
       - name: Test on Windows
         shell: pwsh
         run: .\.venv\Scripts\python.exe -m pytest -q
+      - name: Verify all 18 preissued codes and printable cards
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe scripts\render_team_codes.py --check
       - name: Build Windows portable package
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-lan-v0.4.0
+        run: .\.venv\Scripts\python.exe scripts\build_portable.py --output dist\yanghai-windows-lan-v0.5.0
       - name: Check bundled KataGo using real analysis
         shell: pwsh
-        run: .\dist\yanghai-windows-lan-v0.4.0\YanghaiTournament.exe --check --no-pause
+        run: .\dist\yanghai-windows-lan-v0.5.0\YanghaiTournament.exe --check --no-pause
       - name: Check built-in 18-team startup and credential preservation on restart
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\roster_smoke.py --executable dist\yanghai-windows-lan-v0.4.0\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\roster_smoke.py --executable dist\yanghai-windows-lan-v0.5.0\YanghaiTournament.exe
       - name: Check LAN package with real AI and 50 clients
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\lan_smoke.py --executable dist\yanghai-windows-lan-v0.4.0\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\lan_smoke.py --executable dist\yanghai-windows-lan-v0.5.0\YanghaiTournament.exe
       - name: Check offline two-person practice and formal data isolation
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\practice_smoke.py --executable dist\yanghai-windows-lan-v0.4.0\YanghaiTournament.exe
-      - name: Check LAN practice rooms, 15-table cap, computer opponent and 50 clients
+        run: .\.venv\Scripts\python.exe scripts\practice_smoke.py --executable dist\yanghai-windows-lan-v0.5.0\YanghaiTournament.exe
+      - name: Check same-port local practice, browser isolation, 15 tables and real AI
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\practice_lan_smoke.py --executable dist\yanghai-windows-lan-v0.4.0\YanghaiTournament.exe
+        run: .\.venv\Scripts\python.exe scripts\integrated_practice_smoke.py --executable dist\yanghai-windows-lan-v0.5.0\YanghaiTournament.exe
       - name: Provide downloadable ZIP and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: yanghai-windows-lan-v0.4.0
+          name: yanghai-windows-lan-v0.5.0
           path: |
-            dist/yanghai-windows-lan-v0.4.0.zip
-            dist/yanghai-windows-lan-v0.4.0.zip.sha256
+            dist/yanghai-windows-lan-v0.5.0.zip
+            dist/yanghai-windows-lan-v0.5.0.zip.sha256
           if-no-files-found: error
           retention-days: 14

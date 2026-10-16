@@ -32,6 +32,7 @@ class Store:
         self.state = json.loads(row[0]) if row else {
             "settings": DEFAULT_SETTINGS.copy(), "teams": [], "games": [], "rounds": [], "events": []}
         self.pending_events = []
+        self._migrate_event_defaults()
         # Preserve old per-game tokens, while adding a stable code to each team.
         used = [t["play_code"] for t in self.state["teams"] if t.get("play_code")]
         for team in self.state["teams"]:
@@ -43,6 +44,33 @@ class Store:
             self.pending_events.extend(self.state["events"])
         self.state["events"] = self.state["events"][-100:]
         self.save()
+
+    def _migrate_event_defaults(self):
+        """Apply organizer's new roster policy once, preserving played games.
+
+        The marker also prevents a later, deliberate code rotation from being
+        undone on restart. Per-game legacy tokens remain valid and untouched.
+        """
+        from .initial_roster import INITIAL_CODES, INITIAL_ROSTER, RULE_VERSION
+        if self.state.get("rule_version") == RULE_VERSION:
+            return
+        requested = {(name, tuple((captain, member))): code
+                     for (captain, member, name), code in zip(INITIAL_ROSTER, INITIAL_CODES)}
+        targets = {t["id"]: requested[(t.get("name"), tuple(t.get("players", [])))]
+                   for t in self.state["teams"]
+                   if (t.get("name"), tuple(t.get("players", []))) in requested}
+        reserved = set(targets.values())
+        used = reserved | {t["play_code"] for t in self.state["teams"] if t.get("play_code")}
+        for team in self.state["teams"]:
+            team["checked_in"] = True
+            team["eligibility_checked"] = True
+            if team["id"] in targets:
+                team["play_code"] = targets[team["id"]]
+            elif team.get("play_code") in reserved:
+                # A custom team's old code must not collide with a printed card.
+                team["play_code"] = new_team_code(used)
+                used.add(team["play_code"])
+        self.state["rule_version"] = RULE_VERSION
 
     def save(self):
         # Append audit records, rather than reserializing an entire event's

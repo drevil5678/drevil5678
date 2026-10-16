@@ -17,6 +17,8 @@
         <button data-view="arena" class="active">賽場</button
         ><button data-view="standings">積分榜</button
         ><button data-view="records">隊伍紀錄</button
+        ><button data-view="bracket">淘汰賽對決圖</button
+        ><button data-view="practice">練習</button
         ><button data-view="admin">主辦管理</button
         ><button data-view="guide">參賽說明</button>
       </nav>
@@ -38,8 +40,21 @@
         <div id="empty" class="empty">
           <span class="empty-stone">● ○</span>
           <h2>賽場準備中</h2>
-          <p>主辦方完成檢錄並建立首輪後，對戰桌將顯示於此。</p>
+          <p>主辦方建立首輪後，對戰桌將顯示於此。</p>
         </div>
+      </section>
+      <section id="bracket" class="view hidden">
+        <p class="eyebrow">PLAYOFF BRACKET</p>
+        <h1>淘汰賽對決圖</h1>
+        <p id="bracket-description">瑞士制五輪結束後公布八強對戰；後續晉級隊伍於結果確定後顯示。</p>
+        <div id="bracket-champion"></div>
+        <div id="bracket-tree" class="bracket-tree" aria-live="polite"></div>
+      </section>
+      <section id="practice" class="view hidden">
+        <p class="eyebrow">LOCAL PRACTICE</p>
+        <h1>自由練習</h1>
+        <p>在這台電腦與朋友輪流落子，或與電腦對弈。不開放其他電腦加入這一局，練習不計正式成績。</p>
+        <iframe id="practice-frame" title="同機雙人或電腦對弈" data-src="/local-practice" loading="lazy"></iframe>
       </section>
       <section id="standings" class="view hidden">
         <p class="eyebrow">TOURNAMENT STANDINGS</p>
@@ -98,7 +113,7 @@
             <h2>賽事規則</h2>
             <p>
               主辦方指定判負門檻為
-              40.00%。首輪建立後規則鎖定。開賽前請公告貼目、停一手與裁判終局方式。
+              40.00%。首輪建立後規則鎖定。雙方連續停一手，直接依棋盤現況與貼目計分，不另移除死子。
             </p>
             <form id="settings-form" class="form-grid">
               <label
@@ -151,9 +166,9 @@
             </form>
           </div>
           <div class="panel">
-            <h2>報名與檢錄 <span id="team-count" class="badge"></span></h2>
+            <h2>隊伍資料 <span id="team-count" class="badge"></span></h2>
             <p>
-              每隊兩人，第一位視為隊長。隊員更換會將報名順位移到最後。檢錄前請檢查參賽資格證明。
+              每隊兩人，第一位視為隊長。隊伍預設完成資格確認與檢錄，可直接排賽。「暫無」也是有效姓名。隊員更換會將報名順位移到最後。
             </p>
             <form id="team-form" class="form-grid">
               <input name="id" type="hidden" /><label
@@ -162,13 +177,6 @@
                 >隊長<input name="player1" maxlength="80" required /></label
               ><label
                 >隊員<input name="player2" maxlength="80" required /></label
-              ><label class="check"
-                ><input
-                  name="eligibility_checked"
-                  type="checkbox"
-                />已確認资格證明</label
-              ><label class="check"
-                ><input name="checked_in" type="checkbox" />已檢錄</label
               ><button type="submit">儲存隊伍</button
               ><button id="team-clear" type="button" class="secondary">
                 清空表單
@@ -180,6 +188,7 @@
             <h2>賽程與備份</h2>
             <div class="actions">
               <button id="swiss">建立下一輪瑞士賽</button
+              ><button id="start-swiss">一鍵開始本輪瑞士賽</button
               ><button id="playoff">建立下一輪淘汰賽</button
               ><button id="backup" class="secondary">備份資料庫</button
               ><button id="export" class="secondary">下載賽務與裁判紀錄</button
@@ -187,9 +196,15 @@
               <button id="team-codes" class="secondary">賽前列印隊伍點棋碼</button>
             </div>
             <p>
-              瑞士制共六輪；本輪全部完成後才能建立下一輪。現版本不自動處理輪空。操作碼只交給指定點棋手。
+              瑞士制共五輪；本輪全部完成後才能建立下一輪。一鍵開始後，各隊擲骰、選色並按準備，雙方準備完成才開始計時。操作碼只交給指定點棋手。
             </p>
           </div>
+          <form id="special-table-form" class="panel form-grid">
+            <div class="span"><h2>特別對戰桌</h2><p>指定兩隊獨立對戰，不計入瑞士排名或淘汰晉級。請確認隊伍能夠參加，再開啟特別對戰。</p></div>
+            <label>隊伍一<select name="team_a" required></select></label>
+            <label>隊伍二<select name="team_b" required></select></label>
+            <button type="submit">建立特別對戰桌</button>
+          </form>
           <div id="referee-games" class="grid"></div>
           <div class="panel">
             <h2>近期裁判紀錄</h2>
@@ -207,8 +222,9 @@
             <ol>
               <li>找到自己的對戰桌，輸入主辦方發給點棋手的操作碼。</li>
               <li>
-                開賽前決定是否參考自備設備。使用者僅有 5 分鐘，其他為 10 分鐘。
+                開賽前決定是否參考自備設備。一般賽局每方 10 分鐘，使用自備設備為 5 分鐘；冠軍戰為 15 分鐘，使用自備設備為 10 分鐘。
               </li>
+              <li>主辦方開放開賽後，雙方各擲兩顆骰子，比總點數；同點重擲。較高的一隊選擇黑或白，雙方按「準備好了」後開始對弈。</li>
               <li>
                 紅色叉號是 AI 最高勝率落點，禁止落子；綠色數字是其他 AI
                 建議。也可選擇未標記的合法落點。
@@ -223,19 +239,19 @@
                 從第 61 手開始，最佳合法可選點勝率連續三個自身回合 ≤ 40.00%
                 判負。介面顯示四位小數供核對，判定使用原始值。
               </li>
+              <li>雙方連續停一手後，直接按棋盤現況與貼目自動計分，不另確認或移除死子；勝方得 1 分、敗方 0 分。</li>
             </ol>
           </article>
           <article class="panel">
             <h2>本隊賽程與紀錄</h2>
             <p>隊伍點棋碼由主辦方賽前制發，同一隊整場沿用。每輪進入自己的對戰桌時輸入，系統會辨識本隊黑／白方。只交給本隊指定點棋手保管。</p>
             <p>在「隊伍紀錄」可查看目前對戰、已完成結果、歷史棋局與 SGF 棋譜。已排定的下一場會顯示對手與桌次。</p>
-            <p>瑞士制下一輪需待本輪成績確定再配對；顯示「等待配對」時，下一輪對手尚未決定。</p>
+            <p>瑞士制共五輪。下一輪需待本輪成績確定再配對，優先安排排名接近且未交手的對手；顯示「等待配對」時，下一輪對手尚未決定。</p>
           </article>
           <article class="panel">
             <h2>自由練習</h2>
-            <p>開啟主辦方提供的練習網址，自行開桌或進入朋友的桌子，可選區網真人、同機雙人或與電腦對戰。全場練習最多 15 桌；不需要正式賽的隊伍點棋碼。</p>
-            <p>每位玩家的本桌操作碼請自行保管；真人對戰悔棋需對手同意。結束後先下載 SGF，再由開桌者收桌釋放名額。30 分鐘無操作會自動收桌。</p>
-            <p>練習無計時、不計正式成績，勝率已計入本局貼目。雙人單機練習另可使用 Start-Practice-Offline.cmd。</p>
+            <p>點上方「練習」，可在同一台電腦由兩人輪流落子，或選擇與電腦對戰。不支援跨電腦連線到同一棋局，不需要正式賽點棋碼。</p>
+            <p>全場練習最多 15 桌；練習無計時、不計正式成績，勝率已計入本局貼目。結束後先下載 SGF 再收桌；30 分鐘無操作會自動收桌。</p>
           </article>
         </div>
       </section>
@@ -252,7 +268,9 @@
             ></canvas>
           </div>
           <aside>
+            <p id="move-number" class="move-number" aria-live="polite">已落 0 手 · 輪到第 1 手</p>
             <div id="clocks" class="clocks"></div>
+            <article id="pregame-panel" class="panel hidden" aria-live="polite"></article>
             <div class="panel">
               <div id="match-status"></div>
               <p id="selection">請選擇落點</p>
@@ -271,8 +289,7 @@
               ><button type="submit">進入操作席</button>
               <p id="seat-status">目前為觀戰模式</p>
               <label class="check"
-                ><input id="own-device" type="checkbox" />本場參考自備設備（5
-                分鐘）</label
+                ><input id="own-device" type="checkbox" /><span id="own-device-label">本場參考自備設備（5 分鐘）</span></label
               ><button id="save-device" type="button" class="secondary">
                 確認設備選項
               </button>

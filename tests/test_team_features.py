@@ -108,7 +108,7 @@ def test_participant_guide_has_no_organizer_operations(tmp_path):
         guide = text.split('<section id="guide"', 1)[1].split('</section>', 1)[0]
         for private in ("裁判與主辦方", "50 台電腦的配置", "GPU", "資料庫", "管理金鑰"):
             assert private not in guide
-        assert "等待配對" in guide and "雙人單機練習" in guide
+        assert "等待配對" in guide and "同一台電腦" in guide and "與電腦對戰" in guide
         assert client.get("/openapi.json").status_code == 404
 
 

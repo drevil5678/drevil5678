@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>單機練習 · 楊海分站賽</title><link rel="stylesheet" href="/static/style.css"><script defer src="/static/local-practice.js"></script></head>
+<body>
+<main>
+<div id="practice-notice" role="status" aria-live="polite"></div>
+<section class="panel">
+<h1>單機自由練習</h1>
+<p>兩人共用這台電腦輪流下棋，或獨自挑戰電腦。本桌只供開桌時的電腦與瀏覽器使用，不提供跨電腦入座。不計時、不影響正式賽成績。</p>
+<p id="practice-capacity">正在載入練習桌…</p>
+<form id="practice-settings" class="form-grid">
+<label>桌名<input name="name" value="自由練習" maxlength="40" required></label>
+<label>對戰方式<select name="mode"><option value="local">同機雙人</option><option value="ai">人對電腦</option></select></label>
+<label>你的棋色<select name="human_color" disabled><option value="B">執黑先行</option><option value="W">執白後行</option></select></label>
+<label>棋盤<select name="board_size"><option value="19">19 路</option><option value="13">13 路</option><option value="9">9 路</option></select></label>
+<label>黑棋貼目<input name="komi" type="number" step="0.5" value="7.5" min="-50" max="50" required></label>
+<label>規則<select name="rules"><option value="chinese">中國規則</option><option value="japanese">日本規則</option></select></label>
+<label class="check"><input name="forbid_best" type="checkbox" checked>禁止 AI 首選</label>
+<button type="submit">開一桌練習</button>
+</form>
+<div class="actions"><label>我的練習桌 <select id="practice-table"><option value="">尚未開桌</option></select></label><button id="practice-refresh" class="secondary">重新整理</button></div>
+<p>全場最多 15 桌。結束後請按「收桌」釋放名額；30 分鐘沒有操作會自動收桌。重啟主機會清除練習，需保存時請先下載 SGF。</p>
+</section>
+<div class="match-layout">
+<div class="board-wrap"><canvas id="practice-board" width="740" height="740" aria-label="單機練習棋盤"></canvas></div>
+<aside>
+<article class="panel"><h2 id="practice-status">尚未開始</h2><p id="practice-move-number">已落 0 手 · 接下來第 1 手</p><p id="practice-rules"></p><p id="practice-selection">請先開一桌練習</p>
+<div class="actions"><button id="practice-submit" disabled>確認落子</button><button id="practice-pass" class="secondary" disabled>虛手</button><button id="practice-undo" class="secondary" disabled>悔棋</button><button id="practice-finish" class="secondary" disabled>結束練習</button><button id="practice-retry" class="secondary hidden">重新分析</button><button id="practice-close" class="secondary" disabled>收桌</button></div>
+<p id="practice-result" role="status"></p><div id="practice-hints"></div><a id="practice-sgf" class="hidden" href="#">下載本局 SGF</a></article>
+<article class="panel"><h2>練習方式</h2><ol><li>點棋盤選位置，再按「確認落子」。</li><li>同機雙人由兩位玩家輪流操作；人對電腦時，電腦會自動下另一色。</li><li>紅叉是禁用首選，綠色數字是可參考的建議；也能選其他合法落點。</li><li>勝率已計入本局貼目，以輪到行棋方為觀點。</li><li>雙方連續虛手後，直接依棋盤現況與貼目計分，不另移除死子。</li><li>對電腦悔棋會退回你上次落子前；同機雙人每次退一手。</li></ol></article>
+</aside></div>
+</main></body></html>

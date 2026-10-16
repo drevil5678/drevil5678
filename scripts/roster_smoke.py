@@ -12,7 +12,7 @@ import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from server.initial_roster import INITIAL_ROSTER
+from server.initial_roster import INITIAL_CODES, INITIAL_ROSTER
 
 
 def main(executable=None, port=8772):
@@ -73,11 +73,12 @@ def main(executable=None, port=8772):
                         state = client.get("/api/admin/state", headers=auth).json()
                         teams = state["teams"]
                         assert len(teams) == 18 and not state["rounds"] and not state["games"]
-                        assert not any(t["checked_in"] or t["eligibility_checked"] for t in teams)
+                        assert all(t["checked_in"] and t["eligibility_checked"] for t in teams)
                         if launch == 0:
                             assert [(t["players"][0], t["players"][1], t["name"]) for t in teams] == list(INITIAL_ROSTER)
                             issued = {t["id"]: t["play_code"] for t in teams}
                             assert len(set(issued.values())) == 18
+                            assert [t["play_code"] for t in teams] == list(INITIAL_CODES)
                             first_token = token
                             edited = {key: teams[1][key] for key in ("name", "players", "mars_points")}
                             edited["name"] = "重啟保留修改測試"
@@ -98,8 +99,8 @@ def main(executable=None, port=8772):
                 finally:
                     stop(process)
         report = {"passed": True, "teams": 18, "launches": 2, "ai": "real KataGo",
-                  "codes_ids_and_admin_key_preserved": True, "organizer_edit_preserved": True,
-                  "no_automatic_check_in_or_games": True, "public_credentials_and_players_hidden": True,
+                  "static_codes_ids_and_admin_key_preserved": True, "organizer_edit_preserved": True,
+                  "automatic_check_in_without_automatic_games": True, "public_credentials_and_players_hidden": True,
                   "packaged_app": bool(executable), "platform": sys.platform}
         (ROOT / ".runtime").mkdir(exist_ok=True)
         (ROOT / ".runtime/roster-smoke-report.json").write_text(json.dumps(report, indent=2) + "\n")

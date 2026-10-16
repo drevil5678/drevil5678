@@ -22,8 +22,10 @@ from .credentials import imported_team_code, matches, matches_team_code, new_tea
 from .go import IllegalMove, candidates, decode, encode, play, sgf
 from .lan import network_info
 from .store import Store
-from .tournament import awards, pair_swiss, playoff_pairs, standings
+from .tournament import OFFICIAL_STAGES, SWISS_ROUNDS, awards, bracket, pair_swiss, playoff_pairs, standings
 from .records import team_records
+from .scoring import score_position
+from .local_practice import install_local_practice
 
 ROOT = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 
@@ -32,8 +34,8 @@ class TeamInput(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     players: list[str] = Field(min_length=2, max_length=2)
     mars_points: list[float] = Field(default_factory=lambda: [0, 0], min_length=2, max_length=2)
-    checked_in: bool = False
-    eligibility_checked: bool = False
+    checked_in: bool = True
+    eligibility_checked: bool = True
 
 
 class SettingsInput(BaseModel):
@@ -70,6 +72,23 @@ class CodeReset(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
 
+class DiceInput(BaseModel):
+    attempt: int = Field(ge=1)
+
+
+class ColorInput(DiceInput):
+    color: str
+
+
+class ReadyInput(DiceInput):
+    ready: bool = True
+
+
+class SpecialInput(BaseModel):
+    team_a: str = Field(max_length=60)
+    team_b: str = Field(max_length=60)
+
+
 def create_app(runtime=None, engine=None, network=None, bootstrap=False):
     store = Store(runtime or os.getenv("TOURNAMENT_DATA", str(ROOT / ".runtime")))
     initial_roster_loaded = store.prepare_initial_roster() if bootstrap else False
@@ -78,6 +97,34 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
     lock = asyncio.Lock()
     tasks = set()
     app = None
+
+    def time_limit(game, own_device):
+        return (600. if own_device else 900.) if game.get("stage") == "final" else (300. if own_device else 600.)
+
+    def init_pregame(game):
+        if "pregame" not in game:
+            ids = [s["team"] for s in game["seats"].values()]
+            game["pregame"] = {"armed": False, "attempt": 1, "rolls": {}, "history": [],
+                               "winner": None, "color_choice": None, "ready": {tid: False for tid in ids}}
+        return game["pregame"]
+
+    # Add new fields without replaying or discarding an existing game.
+    for game in state["games"]:
+        if "captures" not in game:
+            captured = {"B": 0, "W": 0}
+            for index, (color, _) in enumerate(game.get("moves", [])):
+                history = game.get("history", [])
+                if len(history) > index + 1:
+                    other = "W" if color == "B" else "B"
+                    captured[color] += max(0, history[index].count(other) - history[index + 1].count(other))
+            game["captures"] = captured
+        if game.get("time_control_version") != "v0.5.0":
+            if game.get("stage") == "final" and game["status"] != "finished":
+                for color in ("B", "W"):
+                    game["remaining"][color] += 300.
+            game["time_control_version"] = "v0.5.0"
+        if game["status"] == "ready":
+            init_pregame(game)
 
     def event(kind, detail):
         store.record_event({"time": time.time(), "kind": kind, "detail": detail})
@@ -131,6 +178,8 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             team = next(t for t in state["teams"] if t["id"] == s["team"])
             s["name"] = team["name"]
         result["candidates"] = result["candidates"][:5]
+        result["move_number"] = len(game["moves"]) + 1
+        result["moves_played"] = len(game["moves"])
         if game["status"] == "playing" and game["clock_started"] is not None:
             color = game["turn"]
             result["remaining"][color] = max(0, result["remaining"][color] - max(0, time.time()-game["clock_started"]))
@@ -149,19 +198,20 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                 if g["generation"] != generation or g["status"] != "analyzing":
                     return
                 options = candidates(g, settings, data["moveInfos"])
-                if len(options) < 2:
+                if not options or (len(options) < 2 and options[0]["move"] != "pass"):
                     raise ValueError("AI 未提供至少兩個合法選點，請裁判處理")
                 g["candidates"] = options
-                g["forbidden"] = options[0]["move"]
-                g["best_legal_winrate"] = options[1]["winrate"]
+                g["forbidden"] = options[0]["move"] if options[0]["move"] != "pass" else None
+                best_legal = options[0] if options[0]["move"] == "pass" else options[1]
+                g["best_legal_winrate"] = best_legal["winrate"]
                 g["analysis_seconds"] = round(duration, 3)
                 color, ply = g["turn"], len(g["moves"])+1
                 if g["evaluated_ply"] != ply:
                     if ply >= settings["loss_start_ply"]:
-                        g["streak"][color] = g["streak"][color]+1 if options[1]["winrate"] <= settings["threshold"] else 0
+                        g["streak"][color] = g["streak"][color]+1 if best_legal["winrate"] <= settings["threshold"] else 0
                     g["evaluated_ply"] = ply
                     event("analysis", {"game": ident, "ply": ply, "color": color,
-                          "forbidden": g["forbidden"], "best_legal_winrate": options[1]["winrate"],
+                          "forbidden": g["forbidden"], "best_legal_winrate": best_legal["winrate"],
                           "streak": g["streak"][color], "seconds": duration,
                           "candidates": options, "root": data.get("rootInfo", {})})
                 if g["streak"][color] >= settings["loss_turns"]:
@@ -194,6 +244,27 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
         task = asyncio.create_task(analyze_game(game["id"], game["generation"]))
         tasks.add(task)
         task.add_done_callback(tasks.discard)
+
+    def start_if_ready(game):
+        p = init_pregame(game)
+        if game["status"] == "ready" and p["armed"] and p["color_choice"] and all(p["ready"].values()):
+            if ai.failure:
+                raise HTTPException(503, "KataGo 尚未就緒")
+            for color, info in game["seats"].items():
+                game["remaining"][color] = time_limit(game, info["own_device"])
+            queue_analysis(game)
+            return True
+        return False
+
+    def require_pregame(game, body, authorization):
+        color = seat(game, authorization)
+        team_id = game["seats"][color]["team"]
+        p = init_pregame(game)
+        if game["status"] != "ready" or not p["armed"]:
+            raise HTTPException(409, "請等待主辦開啟本輪猜先，或本局已開始")
+        if body.attempt != p["attempt"]:
+            raise HTTPException(409, "猜先已進入下一次，請查看最新骰子")
+        return p, team_id
 
     async def ticker():
         last_saved = time.time()
@@ -235,6 +306,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                 event("recovery", {"game": g["id"]})
         store.save()
         await ai.start()
+        await practice.start()
         tick = asyncio.create_task(ticker())
         yield
         tick.cancel()
@@ -250,12 +322,14 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                     g["generation"] += 1
                     g["pause_reason"] = "伺服器停止；需由裁判恢復"
             store.save()
+        await practice.close()
         await ai.close()
         store.db.close()
 
     app = FastAPI(title="楊海分站賽", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.ai = store, ai
     app.state.initial_roster_loaded = initial_roster_loaded
+    practice = install_local_practice(app, ai, ROOT)
 
     @app.middleware("http")
     async def origin_guard(request: Request, call_next):
@@ -267,7 +341,8 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+        ancestors = "'self'" if request.url.path == "/local-practice" else "'none'"
+        response.headers["Content-Security-Policy"] = f"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors {ancestors}"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -290,10 +365,17 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
     @app.get("/api/state")
     async def public_state():
         async with lock:
+            current = next((r for r in reversed(state["rounds"]) if r["stage"] in OFFICIAL_STAGES), None)
             return {"settings": state["settings"], "rounds": state["rounds"],
                     "teams": [{"id": t["id"], "name": t["name"], "order": t["order"]} for t in state["teams"]],
                     "standings": [{k: t[k] for k in ("id", "name", "score", "buchholz", "rank", "order")} for t in standings(state)],
-                    "games": [public_game(g) for g in state["games"] if state["rounds"] and g["round_id"] == state["rounds"][-1]["id"]], "awards": awards(state)}
+                    "games": [public_game(g) for g in state["games"] if g["stage"] == "special" or (current and g["round_id"] == current["id"])],
+                    "bracket": bracket(state), "awards": awards(state)}
+
+    @app.get("/api/bracket")
+    async def get_bracket():
+        async with lock:
+            return bracket(state)
 
     @app.get("/api/admin/state")
     async def admin_state(authorization: str | None = Header(None)):
@@ -359,10 +441,6 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             raise HTTPException(400, "隊名及兩位隊員姓名不可空白，姓名最多 80 字")
         if any(not math.isfinite(p) or p < 0 for p in body.mars_points):
             raise HTTPException(400, "火星積分須為非負有限數值")
-        if body.checked_in and not body.eligibility_checked:
-            raise HTTPException(400, "檢錄前請先確認參賽資格證明")
-        if body.checked_in and any(p.strip() in {"暫無", "待定", "待補", "未定", "尚未提供"} for p in body.players):
-            raise HTTPException(400, "請先補齊兩位隊員姓名，再完成檢錄")
 
     @app.post("/api/admin/teams")
     async def add_team(body: TeamInput, authorization: str | None = Header(None)):
@@ -374,6 +452,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             if any(t["name"] == body.name.strip() for t in state["teams"]):
                 raise HTTPException(409, "隊名重複")
             team = {**body.model_dump(), "name": body.name.strip(), "id": uuid.uuid4().hex[:12],
+                    "checked_in": True, "eligibility_checked": True,
                     "play_code": new_team_code(t["play_code"] for t in state["teams"]),
                     "order": max((t["order"] for t in state["teams"]), default=0)+1}
             state["teams"].append(team)
@@ -396,6 +475,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             if t["players"] != body.players:
                 t["order"] = max(x["order"] for x in state["teams"])+1
             updates = body.model_dump()
+            updates.update(checked_in=True, eligibility_checked=True)
             # The form no longer collects prior points. Keep historical values
             # when an old registration is edited without that optional field.
             if "mars_points" not in body.model_fields_set:
@@ -449,6 +529,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                     code = new_team_code(used)
                     used.append(code)
                 state["teams"].append({**t.model_dump(), "name": t.name.strip(),
+                                      "checked_in": True, "eligibility_checked": True,
                                       "id": uuid.uuid4().hex[:12], "order": order+i,
                                       "play_code": code})
             event("team_import", {"count": len(parsed)})
@@ -462,17 +543,62 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
         size = state["settings"]["board_size"]
         for table, (black, white) in enumerate(pairs, 1):
             board = "." * (size * size)
-            state["games"].append({"id": uuid.uuid4().hex[:12], "round_id": rid,
+            game = {"id": uuid.uuid4().hex[:12], "round_id": rid,
                 "stage": stage, "round": number, "table": table, "status": "ready",
                 "seats": {"B": {"team": black, "token": secrets.token_urlsafe(18), "own_device": False},
                           "W": {"team": white, "token": secrets.token_urlsafe(18), "own_device": False}},
                 "board": board, "history": [board], "moves": [], "turn": "B", "version": 0,
                 "generation": 0, "clock_started": None, "remaining": {"B": 600., "W": 600.},
                 "streak": {"B": 0, "W": 0}, "evaluated_ply": 0, "candidates": [],
-                "forbidden": None, "best_legal_winrate": None, "pause_reason": "", "result": None})
+                "forbidden": None, "best_legal_winrate": None, "pause_reason": "", "result": None,
+                "captures": {"B": 0, "W": 0}, "score": None, "time_control_version": "v0.5.0"}
+            for color in ("B", "W"):
+                game["remaining"][color] = time_limit(game, False)
+            init_pregame(game)
+            state["games"].append(game)
         event("round", round_info)
         store.save()
         return round_info
+
+    @app.post("/api/admin/special-tables")
+    async def special_table(body: SpecialInput, authorization: str | None = Header(None)):
+        require_admin(authorization)
+        async with lock:
+            if not state["settings"]["rules_confirmed"]:
+                raise HTTPException(409, "請先在設定頁確認正式規則")
+            if ai.failure:
+                raise HTTPException(503, "KataGo 尚未就緒")
+            ids = {t["id"] for t in state["teams"]}
+            if body.team_a == body.team_b or body.team_a not in ids or body.team_b not in ids:
+                raise HTTPException(400, "請選擇兩支不同且已登記的隊伍")
+            number = 1 + sum(r["stage"] == "special" for r in state["rounds"])
+            info = new_round("special", number, [(body.team_a, body.team_b)])
+            event("special_table", {"round": info["id"], "teams": [body.team_a, body.team_b], "counts_for_standings": False})
+            store.save()
+            return {"round": info, "game": public_game(state["games"][-1])}
+
+    @app.post("/api/admin/rounds/current/start")
+    async def start_current_round(authorization: str | None = Header(None)):
+        require_admin(authorization)
+        async with lock:
+            current = next((r for r in reversed(state["rounds"]) if r["stage"] in OFFICIAL_STAGES), None)
+            if current is None:
+                raise HTTPException(409, "尚未建立正式輪次")
+            if ai.failure:
+                raise HTTPException(503, "KataGo 尚未就緒")
+            armed, started = 0, 0
+            for game in state["games"]:
+                if game["round_id"] != current["id"] or game["status"] != "ready":
+                    continue
+                p = init_pregame(game)
+                if not p["armed"]:
+                    p["armed"] = True
+                    armed += 1
+                    game["version"] += 1
+                started += int(start_if_ready(game))
+            event("round_start", {"round": current["id"], "armed": armed, "started": started})
+            store.save()
+            return {"armed": armed, "started": started}
 
     @app.post("/api/admin/rounds/{kind}")
     async def next_round(kind: str, authorization: str | None = Header(None)):
@@ -482,13 +608,13 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                 raise HTTPException(409, "請先在設定頁確認正式規則")
             if ai.failure:
                 raise HTTPException(503, "KataGo 尚未就緒")
-            if any(g["status"] != "finished" for g in state["games"]):
+            if any(g["status"] != "finished" for g in state["games"] if g["stage"] in OFFICIAL_STAGES):
                 raise HTTPException(409, "上一輪仍有未完成棋局")
             try:
                 if kind == "swiss":
                     number = 1 + sum(r["stage"] == "swiss" for r in state["rounds"])
-                    if number > 6 or any(r["stage"] != "swiss" for r in state["rounds"]):
-                        raise ValueError("瑞士制共六輪")
+                    if number > SWISS_ROUNDS or any(r["stage"] in OFFICIAL_STAGES and r["stage"] != "swiss" for r in state["rounds"]):
+                        raise ValueError("瑞士制共五輪")
                     return new_round("swiss", number, pair_swiss(state))
                 if kind == "playoff":
                     stage, number, pairs = playoff_pairs(state)
@@ -518,9 +644,71 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             color = seat(g, authorization)
             if g["status"] != "ready":
                 raise HTTPException(409, "須在每場對弈開始前決定是否使用自備設備")
+            p = init_pregame(g)
+            if p["ready"].get(g["seats"][color]["team"]):
+                raise HTTPException(409, "已準備完成，不能再變更自備設備")
             g["seats"][color]["own_device"] = body.own_device
-            g["remaining"][color] = 300. if body.own_device else 600.
+            g["remaining"][color] = time_limit(g, body.own_device)
+            g["version"] += 1
             event("device", {"game": ident, "color": color, "own_device": body.own_device})
+            store.save()
+            return public_game(g)
+
+    @app.post("/api/games/{ident}/dice")
+    async def dice(ident: str, body: DiceInput, authorization: str | None = Header(None)):
+        async with lock:
+            g = game_by_id(ident)
+            p, team_id = require_pregame(g, body, authorization)
+            if p["winner"] or team_id in p["rolls"]:
+                raise HTTPException(409, "本次已擲骰，請等待對手或下一次猜先")
+            p["rolls"][team_id] = [secrets.randbelow(6) + 1 for _ in range(2)]
+            if len(p["rolls"]) == 2:
+                ids = list(p["rolls"])
+                totals = {tid: sum(p["rolls"][tid]) for tid in ids}
+                tied = totals[ids[0]] == totals[ids[1]]
+                p["history"].append({"attempt": p["attempt"], "rolls": copy.deepcopy(p["rolls"]), "tie": tied})
+                if tied:
+                    p["attempt"] += 1
+                    p["rolls"] = {}
+                else:
+                    p["winner"] = max(totals, key=totals.get)
+            g["version"] += 1
+            event("dice", {"game": ident, "team": team_id, "pregame": copy.deepcopy(p)})
+            store.save()
+            return public_game(g)
+
+    @app.post("/api/games/{ident}/color")
+    async def color_choice(ident: str, body: ColorInput, authorization: str | None = Header(None)):
+        async with lock:
+            g = game_by_id(ident)
+            p, team_id = require_pregame(g, body, authorization)
+            if body.color not in ("B", "W") or p["winner"] != team_id:
+                raise HTTPException(403, "只有本次點數較高的隊伍可以選擇黑白")
+            if any(p["ready"].values()):
+                raise HTTPException(409, "已有隊伍準備完成，不能再變更棋色")
+            own_color = next(c for c, s in g["seats"].items() if s["team"] == team_id)
+            if own_color != body.color:
+                g["seats"]["B"], g["seats"]["W"] = g["seats"]["W"], g["seats"]["B"]
+                g["remaining"]["B"], g["remaining"]["W"] = g["remaining"]["W"], g["remaining"]["B"]
+            p["color_choice"] = body.color
+            g["version"] += 1
+            event("color_choice", {"game": ident, "team": team_id, "color": body.color})
+            store.save()
+            return public_game(g)
+
+    @app.post("/api/games/{ident}/ready")
+    async def player_ready(ident: str, body: ReadyInput, authorization: str | None = Header(None)):
+        async with lock:
+            g = game_by_id(ident)
+            p, team_id = require_pregame(g, body, authorization)
+            if not p["winner"] or not p["color_choice"]:
+                raise HTTPException(409, "請先完成雙方擲骰與勝方選擇棋色")
+            if ai.failure and body.ready:
+                raise HTTPException(503, "KataGo 尚未就緒")
+            p["ready"][team_id] = body.ready
+            g["version"] += 1
+            start_if_ready(g)
+            event("player_ready", {"game": ident, "team": team_id, "ready": body.ready})
             store.save()
             return public_game(g)
 
@@ -543,7 +731,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                 chosen = "pass" if pos is None else encode(pos, cfg["board_size"])
             except IllegalMove as exc:
                 raise HTTPException(400, str(exc)) from exc
-            if chosen == g["forbidden"]:
+            if chosen != "pass" and chosen == g["forbidden"]:
                 raise HTTPException(400, "禁止選擇 AI 勝率最高的落點")
             try:
                 board, captured = play(g["board"], color, chosen, cfg["board_size"], g["history"], cfg["rules"], cfg["allow_pass"])
@@ -552,16 +740,23 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             g["board"] = board
             g["history"].append(board)
             g["moves"].append([color, chosen])
+            g["captures"][color] += captured
             g["turn"] = "W" if color == "B" else "B"
             g["version"] += 1
             event("move", {"game": ident, "ply": len(g["moves"]), "color": color,
                            "move": chosen, "captured": captured, "remaining": g["remaining"].copy()})
             if len(g["moves"]) >= 2 and all(m[1] == "pass" for m in g["moves"][-2:]):
-                g["status"] = "paused"
                 g["clock_started"] = None
                 g["generation"] += 1
                 g["candidates"] = []
-                g["pause_reason"] = "雙方停一手；請裁判依公告規則裁定"
+                g["forbidden"] = None
+                g["score"] = score_position(g["board"], cfg["board_size"], cfg["komi"], cfg["rules"], g["captures"])
+                event("score", {"game": ident, "score": g["score"]})
+                if g["score"]["winner"]:
+                    finish(g, g["seats"][g["score"]["winner"]]["team"], "score", 1)
+                else:
+                    g["status"] = "paused"
+                    g["pause_reason"] = "計分平手，請主辦裁定勝隊或重賽"
             else:
                 queue_analysis(g)
             store.save()
@@ -580,7 +775,8 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                     raise HTTPException(409, "棋局已開始")
                 if ai.failure:
                     raise HTTPException(503, "KataGo 未就緒")
-                queue_analysis(g)
+                init_pregame(g)["armed"] = True
+                start_if_ready(g)
             elif body.action == "pause":
                 if not body.reason.strip() or g["status"] not in ("playing", "analyzing"):
                     raise HTTPException(400, "須提供暫停原因且棋局正在進行")
@@ -591,15 +787,17 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
             elif body.action == "resume":
                 if g["status"] != "paused" or ai.failure:
                     raise HTTPException(409, "僅能在 AI 就緒後恢復暫停棋局")
+                if g.get("score") and g["score"]["winner"] is None:
+                    raise HTTPException(409, "本局已雙方虛手且計分平手，請裁定勝隊或重賽")
                 if g["candidates"]:
                     g["status"] = "playing"
                     g["clock_started"] = time.time()
                 else:
                     queue_analysis(g)
             elif body.action == "adjudicate":
-                if not body.reason.strip() or body.winner not in [s["team"] for s in g["seats"].values()] or body.points not in (1., 1.25):
-                    raise HTTPException(400, "須指定本場勝隊、1 或 1.25 積分及裁定理由")
-                finish(g, body.winner, "referee: " + body.reason, body.points)
+                if body.winner not in [s["team"] for s in g["seats"].values()] or body.points not in (1., 1.25):
+                    raise HTTPException(400, "須指定本場勝隊及 1 或 1.25 積分")
+                finish(g, body.winner, "referee: " + body.reason if body.reason.strip() else "referee", body.points)
             elif body.action == "rematch":
                 if not body.reason.strip():
                     raise HTTPException(400, "重賽須填寫原因")
@@ -610,7 +808,10 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
                 g.update({"board": empty, "history": [empty], "moves": [], "turn": "B", "status": "ready",
                           "streak": {"B": 0, "W": 0}, "candidates": [], "forbidden": None,
                           "evaluated_ply": 0, "clock_started": None, "best_legal_winrate": None,
-                          "remaining": {c: 300. if s["own_device"] else 600. for c, s in g["seats"].items()}})
+                          "captures": {"B": 0, "W": 0}, "score": None,
+                          "remaining": {c: time_limit(g, s["own_device"]) for c, s in g["seats"].items()}})
+                g.pop("pregame", None)
+                init_pregame(g)
                 g["generation"] += 1
             else:
                 raise HTTPException(400, "未知裁判操作")

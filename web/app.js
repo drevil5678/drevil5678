@@ -12,6 +12,7 @@ const stages = {
   quarter: "八強賽",
   semi: "四強賽",
   final: "冠軍戰",
+  special: "特別對戰",
 };
 const letters = "ABCDEFGHJKLMNOPQRST";
 let snapshot,
@@ -19,9 +20,11 @@ let snapshot,
   currentGame,
   selected,
   seatColor,
+  seatTeam,
   receivedAt,
   currentView = "arena";
 let networkState;
+let bracketState, rollingTeam = null, pregameBusy = false;
 let selectedRecordTeam = sessionStorage.getItem("teamId") || null;
 let adminToken = sessionStorage.getItem("adminToken") || "",
   seatToken = "",
@@ -91,6 +94,9 @@ function showView(view) {
   }
   if (view === "admin" && adminToken) safe(refreshAdmin);
   if (view === "records") safe(refreshRecords);
+  if (view === "bracket") safe(refreshBracket);
+  if (view === "practice" && !$("practice-frame").getAttribute("src"))
+    $("practice-frame").src = $("practice-frame").dataset.src;
 }
 document
   .querySelectorAll("nav button")
@@ -127,29 +133,28 @@ function timeText(seconds) {
 }
 function renderArena() {
   const s = snapshot.settings;
-  $("guide-settings").textContent = `本場 ${s.board_size} 路 · 黑貼 ${s.komi} 目 · ${s.rules === "chinese" ? "中國" : "日本"}規則。勝率已計入此貼目；從第 ${s.loss_start_ply} 手起，連續 ${s.loss_turns} 個自身回合 ≤ ${(s.threshold * 100).toFixed(2)}% 判負。${s.allow_pass ? "允許停一手，雙方停一手後由裁判處理。" : "本場不允許停一手。"}`;
+  $("guide-settings").textContent = `本場 ${s.board_size} 路 · 黑貼 ${s.komi} 目 · ${s.rules === "chinese" ? "中國" : "日本"}規則。勝率已計入此貼目；從第 ${s.loss_start_ply} 手起，連續 ${s.loss_turns} 個自身回合 ≤ ${(s.threshold * 100).toFixed(2)}% 判負。${s.allow_pass ? "允許停一手，雙方連續停一手後依棋盤現況自動計分，不另移除死子。" : "本場不允許停一手。"}`;
   $("rules-summary").replaceChildren(
     ...[
       `${s.board_size} 路 · 黑貼 ${s.komi} 目`,
-      "每方 10 分鐘 / 自備設備 5 分鐘",
+      "一般賽局 10 / 5 分鐘 · 冠軍戰 15 / 10 分鐘",
       `第 61 手起 · 連續 3 回合 ≤ ${(s.threshold * 100).toFixed(2)}% 判負`,
     ].map((t) => el("span", t)),
   );
-  const round = snapshot.rounds.at(-1);
+  const round = snapshot.rounds.filter(round => round.stage !== "special").at(-1);
   $("round-label").textContent = round
     ? `${stages[round.stage]} · 第 ${round.number} 輪`
     : "等待主辦方開賽";
-  const games = round
-    ? snapshot.games.filter((g) => g.round_id === round.id)
-    : [];
+  const games = snapshot.games || [];
   $("empty").classList.toggle("hidden", !!games.length);
   $("games").replaceChildren();
   for (const g of games) {
     const card = el("article", undefined, "game-card");
+    card.dataset.gameId = g.id;
     card.append(
-      el("span", `TABLE ${String(g.table).padStart(2, "0")}`, "eyebrow"),
+      el("span", `${stages[g.stage] || "對戰"} · TABLE ${String(g.table).padStart(2, "0")}`, "eyebrow"),
       el("h3", `${g.seats.B.name}  vs  ${g.seats.W.name}`),
-      el("span", labels[g.status], "badge"),
+      el("span", gameStatus(g), "badge"),
       el(
         "p",
         `黑 ${timeText(g.remaining.B)}　白 ${timeText(g.remaining.W)} · ${g.moves.length} 手`,
@@ -187,6 +192,42 @@ function renderArena() {
         ]),
       ),
     );
+  }
+}
+function gameStatus(g) {
+  if (g.status === "ready" && g.pregame?.armed) return "猜先與準備中";
+  return labels[g.status] || g.status;
+}
+async function refreshBracket() {
+  const data = await api("/api/bracket");
+  if (JSON.stringify(data) === JSON.stringify(bracketState)) return;
+  bracketState = data;
+  $("bracket-champion").replaceChildren();
+  if (data.champion) $("bracket-champion").append(el("p", `冠軍：${data.champion.name}`, "champion-banner"));
+  $("bracket-tree").replaceChildren();
+  for (const stage of data.stages) {
+    const column = el("div", undefined, "bracket-column");
+    column.append(el("h2", stage.label));
+    const matches = el("div", undefined, "bracket-matches");
+    for (const match of stage.matches) {
+      const card = el("article", undefined, "bracket-match" + (match.winner ? " complete" : ""));
+      card.dataset.match = match.id;
+      card.append(el("p", `第 ${match.number} 組`, "eyebrow"));
+      for (const team of match.teams) {
+        const row = el("div", undefined, "bracket-team" + (team && match.winner?.id === team.id ? " winner" : ""));
+        row.append(team ? button(team.name, () => openTeam(team.id), "secondary team-link") : el("span", "待定"));
+        if (team && stage.stage === "final") row.append(el("strong", `${match.wins[team.id] || 0} 勝`));
+        if (team && match.winner?.id === team.id) row.append(el("span", stage.stage === "final" ? "冠軍" : "晉級", "badge"));
+        card.append(row);
+      }
+      for (const game of match.games) {
+        const result = game.winner ? match.teams.find(team => team?.id === game.winner)?.name : null;
+        card.append(button(`第 ${game.round} 局 · ${result ? result + " 勝" : labels[game.status] || game.status}`, () => openGame(game.id), "secondary bracket-game"));
+      }
+      matches.append(card);
+    }
+    column.append(matches);
+    $("bracket-tree").append(column);
   }
 }
 function renderRecordSelector() {
@@ -230,7 +271,7 @@ async function refreshRecords() {
     const panel = el("article", undefined, "panel"); panel.append(el("h2", title));
     if (!rows.length) panel.append(el("p", title === "歷史對戰" ? "尚無已完成的對戰。" : "目前沒有已排定的對戰。"));
     else panel.append(table(["賽程", "桌次", "本隊棋色", "對手", "狀態／結果", "積分", "棋局"], rows.map(g => {
-      const outcome = g.outcome ? `${g.outcome === "win" ? "勝" : "負"} · ${g.reason === "threshold" ? "連續低勝率" : g.reason === "timeout" ? "時間耗盡" : "裁判裁定"}` : labels[g.status];
+      const outcome = g.outcome ? `${g.outcome === "win" ? "勝" : "負"} · ${g.reason === "threshold" ? "連續低勝率" : g.reason === "timeout" ? "時間耗盡" : g.reason === "score" ? "雙方停一手計分" : "裁判裁定"}` : labels[g.status];
       const links = el("div"); links.append(button("查看棋局", () => openGame(g.id), "secondary"));
       if (g.status === "finished") { const a = el("a", "SGF"); a.href = `/api/games/${g.id}/sgf`; a.className = "download"; links.append(a); }
       return [`${stages[g.stage]} · 第 ${g.round} 輪`, g.table, g.color === "B" ? "黑" : "白", button(g.opponent, () => openTeam(g.opponent_id), "secondary"), outcome, g.outcome ? g.points : "—", links];
@@ -241,6 +282,7 @@ async function refreshRecords() {
 async function openGame(id) {
   selectedGame = id;
   seatColor = null;
+  seatTeam = null;
   selected = null;
   lastVersion = null;
   seatToken = sessionStorage.getItem("seat:" + id) || "";
@@ -259,6 +301,7 @@ async function openGame(id) {
 async function refreshGame() {
   if (!selectedGame) return;
   currentGame = await api("/api/games/" + selectedGame);
+  if (seatTeam) seatColor = ["B", "W"].find(color => currentGame.seats[color].team === seatTeam) || null;
   receivedAt = performance.now();
   if (currentGame.version !== lastVersion) {
     selected = null;
@@ -278,20 +321,24 @@ function renderMatch() {
     ),
   );
   $("match-status").textContent =
-    labels[g.status] +
+    gameStatus(g) +
     (g.pause_reason && g.status === "paused" ? "：" + g.pause_reason : "");
   if (g.result) {
     const winner = Object.values(g.seats).find(
       (s) => s.team === g.result.winner,
     );
     $("match-status").textContent =
-      `${winner.name} 獲勝 · ${g.result.reason === "threshold" ? "連續低勝率" : g.result.reason === "timeout" ? "對手時間耗盡" : g.result.reason}`;
+      `${winner?.name || "勝方"} 獲勝 · ${g.result.reason === "threshold" ? "連續低勝率" : g.result.reason === "timeout" ? "對手時間耗盡" : g.result.reason === "score" ? "雙方停一手計分" : "裁判裁定"}`;
   }
+  if (g.score) $("match-status").textContent += ` · 黑 ${g.score.black} 目 / 白 ${g.score.white} 目（含貼目）${g.score.winner ? ` · 勝 ${g.score.margin} 目` : " · 平手，等待主辦裁定"}`;
+  $("move-number").textContent = `已落 ${g.moves.length} 手${g.status === "finished" ? " · 本局結束" : ` · 輪到第 ${g.moves.length + 1} 手`}`;
   $("seat-status").textContent = seatColor
-    ? `你是 ${seatColor === "B" ? "黑" : "白"} 棋點棋手`
+    ? `你是 ${seatColor === "B" ? "黑" : "白"} 棋點棋手${g.status === "ready" && !g.pregame?.color_choice ? "（暫定，猜先後確認棋色）" : ""}`
     : "目前為觀戰模式";
-  $("own-device").disabled = g.status !== "ready" || !seatColor;
-  $("save-device").disabled = g.status !== "ready" || !seatColor;
+  const deviceLocked = g.status !== "ready" || !seatColor || !!g.pregame?.ready?.[seatTeam];
+  $("own-device").disabled = deviceLocked;
+  $("save-device").disabled = deviceLocked;
+  $("own-device-label").textContent = `本場參考自備設備（${g.stage === "final" ? 10 : 5} 分鐘；未使用為 ${g.stage === "final" ? 15 : 10} 分鐘）`;
   if (seatColor) $("own-device").checked = g.seats[seatColor].own_device;
   $("pass").disabled = !(
     seatColor === g.turn &&
@@ -306,17 +353,89 @@ function renderMatch() {
     $("hints").append(
       el(
         "div",
-        `${index === 0 ? "✕ 禁止" : "建議 " + index}　${hint.move}　${(hint.winrate * 100).toFixed(4)}%`,
-        "hint-row" + (index === 0 ? " forbidden" : ""),
+        `${hint.move === g.forbidden ? "✕ 禁止" : "建議 " + (g.forbidden ? index : index + 1)}　${hint.move}　${(hint.winrate * 100).toFixed(4)}%`,
+        "hint-row" + (hint.move === g.forbidden ? " forbidden" : ""),
       ),
     );
   if (g.analysis_seconds !== undefined)
     $("hints").append(
       el("small", `本次分析 ${g.analysis_seconds} 秒 · 勝率為輪到行棋方觀點`),
     );
+  renderPregame();
   updateSelection();
   drawBoard();
   renderClocks();
+}
+const diceFaces = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+async function pregameAction(action, body) {
+  if (pregameBusy || !currentGame || !seatTeam) return;
+  const gameId = selectedGame, attempt = currentGame.pregame.attempt;
+  pregameBusy = true;
+  if (action === "dice") rollingTeam = seatTeam;
+  renderPregame();
+  try {
+    const request = api(`/api/games/${gameId}/${action}`, { method: "POST", token: seatToken, body: { ...body, attempt } });
+    if (action === "dice") await Promise.all([request, new Promise(resolve => setTimeout(resolve, 700))]);
+    else await request;
+  } finally {
+    pregameBusy = false;
+    rollingTeam = null;
+    if (selectedGame === gameId) await refreshGame();
+  }
+}
+function renderPregame() {
+  const g = currentGame, panel = $("pregame-panel"), p = g?.pregame;
+  panel.classList.toggle("hidden", !p || g.status !== "ready");
+  if (!p || g.status !== "ready") return;
+  panel.replaceChildren(el("h2", "猜先與賽前準備"));
+  panel.append(el("p", p.armed ? `第 ${p.attempt} 次擲骰 · 每隊兩顆骰子，比總點數。` : "等待主辦方開放開賽，之後雙方擲骰猜先。"));
+  for (const color of ["B", "W"]) {
+    const team = g.seats[color], roll = p.rolls?.[team.team], row = el("div", undefined, "dice-team");
+    row.append(el("strong", team.name));
+    const faces = el("span", rollingTeam === team.team ? "🎲 🎲" : roll ? roll.map(die => diceFaces[die]).join(" ") : "□ □", "dice-faces" + (rollingTeam === team.team ? " rolling" : ""));
+    faces.setAttribute("aria-label", roll ? `${roll[0]} 加 ${roll[1]}，共 ${roll[0] + roll[1]} 點` : "尚未擲骰");
+    row.append(faces, el("span", roll ? `${roll[0]} + ${roll[1]} = ${roll[0] + roll[1]} 點` : "尚未擲骰"));
+    panel.append(row);
+  }
+  const ties = (p.history || []).filter(round => round.tie);
+  if (ties.length) {
+    const history = el("details"); history.append(el("summary", `同點重擲 ${ties.length} 次，查看紀錄`));
+    for (const round of ties) {
+      const rolls = Object.entries(round.rolls).map(([id, values]) => `${Object.values(g.seats).find(seat => seat.team === id)?.name || "隊伍"} ${values.join("+")}=${values[0] + values[1]}`);
+      history.append(el("p", `第 ${round.attempt} 次：${rolls.join("；")}，同點。`));
+    }
+    panel.append(history);
+  }
+  if (!seatTeam) panel.append(el("p", "輸入本隊固定點棋碼，即可擲骰及準備。"));
+  if (seatTeam && !p.winner && !p.rolls?.[seatTeam]) {
+    const roll = button(rollingTeam ? "擲骰中…" : "擲兩顆骰子", () => pregameAction("dice", {}));
+    roll.id = "roll-dice";
+    roll.disabled = !p.armed || pregameBusy;
+    panel.append(roll);
+  }
+  if (seatTeam && p.rolls?.[seatTeam] && !p.winner) panel.append(el("p", "已擲骰，等待對手。"));
+  if (p.winner) {
+    const winner = Object.values(g.seats).find(team => team.team === p.winner);
+    panel.append(el("p", `${winner?.name || "較高點數隊伍"} 點數較高，可選擇黑棋或白棋。`, "dice-winner"));
+    if (!p.color_choice && seatTeam === p.winner) {
+      const choices = el("div", undefined, "actions");
+      for (const color of ["B", "W"]) {
+        const choice = button(color === "B" ? "選擇執黑" : "選擇執白", () => pregameAction("color", { color }), "secondary");
+        choice.id = "choose-" + color;
+        choice.disabled = pregameBusy;
+        choices.append(choice);
+      }
+      panel.append(choices);
+    } else if (!p.color_choice) panel.append(el("p", "等待高點數隊伍選擇棋色。"));
+    if (p.color_choice) panel.append(el("p", `黑：${g.seats.B.name}；白：${g.seats.W.name}`));
+    for (const color of ["B", "W"]) panel.append(el("p", `${g.seats[color].name}：${p.ready?.[g.seats[color].team] ? "已準備好 ✓" : "尚未準備"}`, "ready-team"));
+    if (seatTeam) {
+      const ready = button(p.ready?.[seatTeam] ? "已準備好 ✓" : "準備好了", () => pregameAction("ready", { ready: true }));
+      ready.id = "ready-game";
+      ready.disabled = !p.color_choice || !!p.ready?.[seatTeam] || pregameBusy;
+      panel.append(ready, el("small", "請先確認設備選項；雙方準備完成後開始計時。"));
+    }
+  }
 }
 function renderClocks() {
   if (!currentGame) return;
@@ -422,14 +541,15 @@ function drawBoard() {
     if (!p) return;
     const x = pad + p[0] * step,
       y = pad + p[1] * step;
-    c.fillStyle = index === 0 ? "#b34638" : "#1c6554";
+    const forbidden = hint.move === g.forbidden;
+    c.fillStyle = forbidden ? "#b34638" : "#1c6554";
     c.beginPath();
     c.arc(x, y, step * 0.32, 0, Math.PI * 2);
     c.fill();
     c.fillStyle = "white";
     c.font = `bold ${Math.max(11, step * 0.34)}px system-ui`;
     c.textAlign = "center";
-    c.fillText(index === 0 ? "×" : index, x, y + step * 0.12);
+    c.fillText(forbidden ? "×" : String(g.forbidden ? index : index + 1), x, y + step * 0.12);
   });
   if (selected) {
     const p = coord(selected, n);
@@ -493,15 +613,14 @@ async function sendMove(move) {
 $("submit-move").onclick = () => safe(() => sendMove(selected));
 $("pass").onclick = () =>
   safe(async () => {
-    if (currentGame.forbidden === "pass")
-      throw new Error("停一手是本回合 AI 最高勝率選點，不可使用");
-    if (confirm("確定停一手？雙方連續停一手將交由裁判處理。"))
+    if (confirm("確定停一手？雙方連續停一手將按棋盤現況與貼目直接計分，不另移除死子。"))
       await sendMove("pass");
   });
 $("back").onclick = () => showView("arena");
 async function joinSeat() {
   const s = await api(`/api/games/${selectedGame}/seat`, { token: seatToken });
   seatColor = s.color;
+  seatTeam = s.team;
   if (s.credential === "team") {
     sessionStorage.setItem("teamCode", seatToken);
     sessionStorage.setItem("teamId", s.team);
@@ -659,8 +778,6 @@ $("team-form").onsubmit = (event) => {
     const body = {
       name: f.name.value,
       players: [f.player1.value, f.player2.value],
-      eligibility_checked: f.eligibility_checked.checked,
-      checked_in: f.checked_in.checked,
     };
     await api("/api/admin/teams" + (ident ? "/" + ident : ""), {
       method: ident ? "PUT" : "POST",
@@ -683,17 +800,14 @@ function editTeam(t) {
   f.name.value = t.name;
   f.player1.value = t.players[0];
   f.player2.value = t.players[1];
-  f.checked_in.checked = t.checked_in;
-  f.eligibility_checked.checked = t.eligibility_checked;
   $("team-form").scrollIntoView({ behavior: "smooth" });
 }
 function renderAdmin() {
   const s = adminState;
-  $("team-count").textContent =
-    `${s.teams.length}/32 隊 · ${s.teams.filter((t) => t.checked_in).length} 隊已檢錄`;
+  $("team-count").textContent = `${s.teams.length}/32 隊 · 全部可排賽`;
   $("roster").replaceChildren(
     table(
-      ["序", "隊伍", "隊長／隊員", "檢錄", "操作", "點棋碼"],
+      ["序", "隊伍", "隊長／隊員", "操作", "點棋碼"],
       s.teams
         .slice()
         .sort((a, b) => a.order - b.order)
@@ -701,24 +815,34 @@ function renderAdmin() {
           t.order,
           t.name,
           t.players.join(" / "),
-          t.checked_in ? "已檢錄" : "未檢錄",
           button("編輯", () => editTeam(t), "secondary"),
           teamCodeActions(t),
         ]),
     ),
   );
   $("referee-games").replaceChildren();
-  const round = s.rounds.at(-1);
-  for (const g of s.games.filter((g) => g.round_id === round?.id)) {
+  const round = s.rounds.filter(round => round.stage !== "special").at(-1);
+  const swissRound = s.rounds.filter(round => round.stage === "swiss").at(-1);
+  $("start-swiss").disabled = !swissRound || !s.games.some(game => game.round_id === swissRound.id && game.status === "ready" && !game.pregame?.armed);
+  const specialForm = $("special-table-form").elements;
+  for (const key of ["team_a", "team_b"]) {
+    const select = specialForm.namedItem(key), previous = select.value;
+    select.replaceChildren(el("option", "請選擇隊伍"));
+    select.firstChild.value = "";
+    for (const team of s.teams) { const option = el("option", team.name); option.value = team.id; select.append(option); }
+    if (s.teams.some(team => team.id === previous)) select.value = previous;
+  }
+  for (const g of s.games.filter((g) => g.round_id === round?.id || g.stage === "special")) {
     const card = el("article", undefined, "panel"),
       actions = el("div", undefined, "actions");
+    card.dataset.gameId = g.id;
     card.append(
-      el("h2", `第 ${g.table} 桌`),
+      el("h2", `${stages[g.stage]} · 第 ${g.table} 桌`),
       el("p", `${g.seats.B.name} vs ${g.seats.W.name}`),
-      el("span", labels[g.status], "badge"),
+      el("span", gameStatus(g), "badge"),
     );
-    if (g.status === "ready")
-      actions.append(button("開賽", () => referee(g, "start")));
+    if (g.status === "ready" && !g.pregame?.armed)
+      actions.append(button("開放猜先與準備", () => referee(g, "start")));
     if (["playing", "analyzing"].includes(g.status))
       actions.append(button("暫停", () => referee(g, "pause"), "secondary"));
     if (g.status === "paused")
@@ -764,14 +888,14 @@ async function referee(g, action) {
   let reason = "",
     winner = null,
     points = 1;
-  if (["pause", "rematch", "adjudicate"].includes(action)) {
+  if (["pause", "rematch"].includes(action)) {
     reason = prompt("請填寫裁判處理原因（將記錄在稽核紀錄）");
     if (!reason) return;
   }
   if (
     action === "start" &&
     !confirm(
-      `確認第 ${g.table} 桌開賽？\n黑方 ${g.seats.B.own_device ? 5 : 10} 分鐘；白方 ${g.seats.W.own_device ? 5 : 10} 分鐘。`,
+      `開放第 ${g.table} 桌猜先與準備？雙方選色並按「準備好了」後才開始對弈與計時。`,
     )
   )
     return;
@@ -804,6 +928,23 @@ for (const kind of ["swiss", "playoff"])
       await poll();
       loadSettings();
     });
+$("start-swiss").onclick = () => safe(async () => {
+  if (!confirm("一鍵開放本輪全部瑞士對戰桌？各桌雙方擲骰、選色並準備好後，才開始計時。")) return;
+  const result = await api("/api/admin/rounds/current/start", { method: "POST", token: adminToken });
+  await refreshAdmin();
+  notice(`已開放 ${result.armed} 桌猜先與準備；${result.started} 桌已開始對弈`);
+});
+$("special-table-form").onsubmit = event => {
+  event.preventDefault();
+  safe(async () => {
+    const f = event.target.elements;
+    if (f.team_a.value === f.team_b.value) throw new Error("請選擇兩支不同隊伍");
+    await api("/api/admin/special-tables", { method: "POST", token: adminToken, body: { team_a: f.team_a.value, team_b: f.team_b.value } });
+    await refreshAdmin();
+    await poll();
+    notice("已建立特別對戰桌，獨立計分，不影響瑞士排名與淘汰晉級");
+  });
+};
 $("backup").onclick = () =>
   safe(async () => {
     const result = await api("/api/admin/backup", {
@@ -828,7 +969,7 @@ $("export").onclick = () =>
 $("seats").onclick = () =>
   safe(async () => {
     await refreshAdmin();
-    const last = adminState.rounds.at(-1);
+    const last = adminState.rounds.filter(round => round.stage !== "special").at(-1) || adminState.rounds.at(-1);
     if (!last) throw new Error("請先建立本輪賽程");
     $("print-seats").replaceChildren(el("h1", "楊海分站賽 · 點棋手操作碼"));
     for (const g of adminState.games.filter((g) => g.round_id === last.id))
@@ -837,7 +978,7 @@ $("seats").onclick = () =>
         slip.append(
           el(
             "h2",
-            `第 ${g.table} 桌 · ${color === "B" ? "黑" : "白"}方 · ${g.seats[color].name}`,
+            `第 ${g.table} 桌 · ${g.seats[color].name}${g.pregame?.color_choice ? ` · ${color === "B" ? "黑" : "白"}方` : " · 猜先後決定棋色"}`,
           ),
           el("p", `${stages[g.stage]} 第 ${g.round} 輪`),
           el("code", g.seat_tokens[color]),
@@ -859,8 +1000,7 @@ $("team-codes").onclick = () => safe(async () => {
   }
   document.body.dataset.printMode = "seats"; window.print();
 });
-// Atomic roster import: import in original registration order, then check in each
-// team after the referee has inspected eligibility documents.
+// Atomic roster import preserves the submitted registration order and codes.
 const importPanel = el("article", undefined, "panel"),
   importForm = el("form"),
   csvBox = el("textarea");
@@ -877,7 +1017,7 @@ importPanel.append(
   el("h2", "批次匯入報名名單"),
   el(
     "p",
-    "直接貼上含標題的 Excel／試算表資料，或英文欄位 CSV，最多 32 隊。依貼上順序建立報名順位；點棋碼可使用預製碼，留白則自動產生。重複匯入會整批拒絕，不會覆寫原有隊伍與點棋碼。匯入後仍需補齊姓名、確認資格並逐隊檢錄。",
+    "直接貼上含標題的 Excel／試算表資料，或英文欄位 CSV，最多 32 隊。依貼上順序建立報名順位；點棋碼可使用預製碼，留白則自動產生。隊伍預設已完成資格確認與檢錄。重複匯入會整批拒絕，不會覆寫原有隊伍與點棋碼。",
   ),
   importForm,
 );
@@ -892,7 +1032,7 @@ importForm.onsubmit = (event) => {
     });
     csvBox.value = "";
     await refreshAdmin();
-    notice(`已匯入 ${result.imported} 隊與固定點棋碼；可先列印發放，檢錄前請確認姓名與資格`);
+    notice(`已匯入 ${result.imported} 隊與固定點棋碼，可直接排賽及列印發放`);
   });
 };
 $("backup").parentElement.append(
@@ -922,6 +1062,7 @@ async function poll() {
     renderArena();
     if (selectedGame) await refreshGame();
     if (currentView === "records") await refreshRecords();
+    if (currentView === "bracket") await refreshBracket();
     if (currentView === "admin" && adminToken && pollCount % 5 === 0)
       await refreshAdmin();
     if (pollCount % 10 === 0) {
@@ -944,7 +1085,7 @@ safe(async () => {
   const hash = location.hash.slice(1);
   if (hash.startsWith("game/")) await openGame(hash.slice(5));
   else if (hash.startsWith("team/")) await openTeam(hash.slice(5));
-  else if (["arena", "standings", "records", "admin", "guide"].includes(hash))
+  else if (["arena", "standings", "records", "bracket", "practice", "admin", "guide"].includes(hash))
     showView(hash);
 });
 setInterval(poll, 1000);

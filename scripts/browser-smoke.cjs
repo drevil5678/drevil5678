@@ -102,15 +102,9 @@ async function get(endpoint, token) {
   await admin.getByRole("button", {name: "匯入名單與點棋碼", exact: true}).click();
   await admin.locator("#notice").filter({hasText: "已匯入 2 隊"}).waitFor();
   assert((await admin.locator("#roster-import").inputValue()) === "", "private roster remains in import field");
-  for (const name of ["探索隊", "星際隊"]) {
-    await admin.locator("#roster tr").filter({hasText: name}).getByRole("button", {name: "編輯", exact: true}).click();
-    await admin.locator('#team-form [name="eligibility_checked"]').check();
-    await admin.locator('#team-form [name="checked_in"]').check();
-    await admin.locator("#team-form button[type=submit]").click();
-    await admin.locator("#roster td").filter({ hasText: name }).waitFor();
-  }
   const issuedTeams = (await get("/api/admin/state", adminToken)).teams;
   assert(issuedTeams.every(t => t.play_code), "team codes not generated before pairing");
+  assert(issuedTeams.every(t => t.checked_in && t.eligibility_checked), "teams not automatically ready");
   await admin.locator("#team-codes").click();
   await admin.waitForFunction(() => document.body.dataset.printMode === "seats");
   const issuedText = await admin.locator("#print-seats").textContent();
@@ -145,13 +139,36 @@ async function get(endpoint, token) {
     .filter({ hasText: "設備選項已儲存" })
     .waitFor();
   await sleep(1300);
-  await admin.getByRole("button", { name: "開賽", exact: true }).click();
+  await admin.locator("#start-swiss").click();
+  async function playerPost(endpoint, token, payload) {
+    const r = await fetch(base + endpoint, { method: "POST", headers: {
+      Authorization: "Bearer " + token, "Content-Type": "application/json"
+    }, body: JSON.stringify(payload) });
+    assert(r.ok, "Pregame action failed: " + endpoint);
+    return r.json();
+  }
+  const credentials = Object.fromEntries(["B", "W"].map(color => [game.seats[color].team, game.seat_tokens[color]]));
+  let pregame;
+  for (let i=0;i<50;i++) {
+    pregame = (await get("/api/games/" + game.id)).pregame;
+    for (const [team, token] of Object.entries(credentials)) {
+      if (!pregame.rolls[team]) await playerPost(`/api/games/${game.id}/dice`, token, { attempt: pregame.attempt });
+    }
+    pregame = (await get("/api/games/" + game.id)).pregame;
+    if (pregame.winner) break;
+    if (i===49) throw Error("Dice did not produce non-tied result");
+  }
+  await playerPost(`/api/games/${game.id}/color`, credentials[pregame.winner], {
+    attempt: pregame.attempt, color: pregame.winner === game.seats.B.team ? "B" : "W"
+  });
+  for (const token of Object.values(credentials)) await playerPost(`/api/games/${game.id}/ready`, token, { attempt: pregame.attempt, ready: true });
   await black.locator("#match-status").filter({ hasText: "對弈中" }).waitFor();
   const publicGame = await get("/api/games/" + game.id);
   assert(
     publicGame.remaining.B <= 300 && publicGame.remaining.B > 290,
     "5 minute clock not applied",
   );
+  await black.locator("#board").scrollIntoViewIfNeeded();
   const rectangle = await black.locator("#board").boundingBox(),
     letters = "ABCDEFGHJKLMNOPQRST";
   async function clickMove(move) {
@@ -215,7 +232,7 @@ async function get(endpoint, token) {
   await black.getByRole("button", { name: "參賽說明", exact: true }).click();
   const guide = await black.locator("#guide").innerText();
   assert(!guide.includes("GPU") && !guide.includes("資料庫") && !guide.includes("裁判與主辦方"), "guide exposes organizer operations");
-  const decided = await fetch(base + `/api/admin/games/${game.id}/action`, { method: "POST", headers: { Authorization: "Bearer " + adminToken, "Content-Type": "application/json" }, body: JSON.stringify({ action: "adjudicate", winner: game.seats.B.team, points: 1, reason: "browser demo result" }) });
+  const decided = await fetch(base + `/api/admin/games/${game.id}/action`, { method: "POST", headers: { Authorization: "Bearer " + adminToken, "Content-Type": "application/json" }, body: JSON.stringify({ action: "adjudicate", winner: game.seats.B.team, points: 1 }) });
   assert(decided.ok, "demo adjudication failed");
   await black.getByRole("button", { name: "隊伍紀錄", exact: true }).click();
   await black.locator("#team-records").filter({ hasText: "勝 · 裁判裁定" }).waitFor();
@@ -261,7 +278,8 @@ async function get(endpoint, token) {
           "Chinese spreadsheet roster import and clearing private input",
           "admin login",
           "rule settings",
-          "registration and check-in",
+          "automatic registration eligibility and check-in",
+          "bulk round start, dice, color selection and both ready",
           "pairing",
           "player authentication",
           "5-minute device selection",

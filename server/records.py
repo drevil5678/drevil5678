@@ -1,5 +1,5 @@
 """Public team history. Future Swiss opponents are never guessed."""
-from .tournament import standings
+from .tournament import OFFICIAL_STAGES, SWISS_ROUNDS, standings
 
 
 def team_records(state, ident):
@@ -20,7 +20,7 @@ def team_records(state, ident):
                 "opponent_id": g["seats"][other]["team"], "status": g["status"],
                 "moves": len(g["moves"]), "outcome": ("win" if result["winner"] == ident else "loss") if result else None,
                 "points": result["points"] if result and result["winner"] == ident else 0,
-                "reason": ("threshold" if result["reason"] == "threshold" else "timeout" if result["reason"] == "timeout" else "referee") if result else None}
+                "reason": (result["reason"] if result["reason"] in {"threshold", "timeout", "score"} else "referee") if result else None}
 
     scheduled = [summary(g) for g in own if g["status"] == "ready"]
     active = [summary(g) for g in own if g["status"] not in ("ready", "finished")]
@@ -28,20 +28,20 @@ def team_records(state, ident):
     following = {"status": "waiting_pairing", "message": "尚未建立賽程；請等待主辦方配對。"}
     if scheduled:
         following = {"status": "scheduled", "message": "下一場已排定，請查看下方桌次與對手。"}
-    elif state["rounds"]:
-        last = state["rounds"][-1]
+    elif any(r["stage"] in OFFICIAL_STAGES for r in state["rounds"]):
+        last = next(r for r in reversed(state["rounds"]) if r["stage"] in OFFICIAL_STAGES)
         if last["stage"] == "swiss":
-            if last["number"] < 6:
+            if last["number"] < SWISS_ROUNDS:
                 following = {"status": "waiting_pairing", "stage": "swiss", "round": last["number"]+1,
                              "message": f"瑞士制下一輪對手須待本輪全部成績確定後，由主辦方配對；目前尚未排定。下一輪為第 {last['number']+1} 輪。"}
             else:
-                all_done = all(g["status"] == "finished" for g in state["games"])
+                all_done = all(g["status"] == "finished" for g in state["games"] if g["stage"] == "swiss")
                 if all_done and (rank is None or rank["rank"] > 8):
-                    following = {"status": "finished", "message": "六輪瑞士賽已完成，本隊未晉級八強。"}
+                    following = {"status": "finished", "message": "瑞士賽已完成，本隊未晉級八強。"}
                 else:
-                    following = {"status": "waiting_seed", "message": "六輪成績確定後，依前八名建立淘汰賽；尚未排定。"}
-        elif own:
-            latest = own[-1]
+                    following = {"status": "waiting_seed", "message": "瑞士賽成績確定後，依前八名建立淘汰賽；尚未排定。"}
+        elif any(g["stage"] in OFFICIAL_STAGES for g in own):
+            latest = next(g for g in reversed(own) if g["stage"] in OFFICIAL_STAGES)
             if latest["stage"] == "swiss" or (latest["stage"] in ("quarter", "semi") and latest.get("result") and latest["result"]["winner"] != ident):
                 following = {"status": "finished", "message": "本隊賽程已結束。"}
             elif last["stage"] == "final":

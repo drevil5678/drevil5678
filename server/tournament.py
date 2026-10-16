@@ -1,5 +1,7 @@
-"""Six-round Swiss, Buchholz/registration ties and an eight-team bracket."""
-import math
+"""Five-round Swiss, Buchholz/registration ties and an eight-team bracket."""
+
+SWISS_ROUNDS = 5
+OFFICIAL_STAGES = {"swiss", "quarter", "semi", "final"}
 
 
 def standings(state):
@@ -38,7 +40,9 @@ def pair_swiss(state):
             return []
         a = rest[0]
         options = [b for b in rest[1:] if b["id"] not in a["opponents"]]
-        options.sort(key=lambda b: (abs(a["score"]-b["score"]), abs(a["rank"]-b["rank"])))
+        # `rest` keeps standings order. Try the nearest lower-ranked team,
+        # skipping previous opponents. Backtrack only when needed to complete
+        # the remaining tables without a repeat opponent.
         for b in options:
             pairs = match([r for r in rest[1:] if r["id"] != b["id"]])
             if pairs is not None:
@@ -54,11 +58,12 @@ def pair_swiss(state):
 
 
 def playoff_pairs(state):
-    games = state["games"]
+    games = [g for g in state["games"] if g["stage"] in OFFICIAL_STAGES]
     swiss = [g for g in games if g["stage"] == "swiss"]
-    if not swiss or max(g["round"] for g in swiss) != 6 or any(g["status"] != "finished" for g in swiss):
-        raise ValueError("需先完成六輪瑞士賽")
-    last = state["rounds"][-1]
+    # A legacy event with a sixth played round remains usable after upgrading.
+    if not swiss or max(g["round"] for g in swiss) < SWISS_ROUNDS or any(g["status"] != "finished" for g in swiss):
+        raise ValueError("需先完成五輪瑞士賽")
+    last = next(r for r in reversed(state["rounds"]) if r["stage"] in OFFICIAL_STAGES)
     previous = [g for g in games if g["round_id"] == last["id"]]
     if any(g["status"] != "finished" for g in previous):
         raise ValueError("上一輪尚未完成")
@@ -79,6 +84,67 @@ def playoff_pairs(state):
         raise ValueError("冠軍戰已結束")
     g = finals[-1]
     return "final", last["number"]+1, [(g["seats"]["W"]["team"], g["seats"]["B"]["team"])]
+
+
+def bracket(state):
+    """Public bracket, including stable empty slots before seeds are known."""
+    names = {t["id"]: {"id": t["id"], "name": t["name"]} for t in state["teams"]}
+    swiss = [g for g in state["games"] if g["stage"] == "swiss"]
+    complete = bool(swiss) and max(g["round"] for g in swiss) >= SWISS_ROUNDS and all(
+        g["status"] == "finished" for g in swiss)
+    ranked = standings(state)[:8] if complete else []
+    seeds = {t["id"]: t["rank"] for t in ranked}
+
+    def team(tid):
+        if tid is None:
+            return None
+        result = names[tid].copy()
+        if tid in seeds:
+            result["seed"] = seeds[tid]
+        return result
+
+    def slot(stage, number, predicted, games):
+        games = sorted(games, key=lambda g: (g["round"], g.get("table", 1)))
+        tids = [games[0]["seats"][c]["team"] for c in ("B", "W")] if games else predicted
+        wins = {tid: 0 for tid in tids if tid is not None}
+        for game in games:
+            if game.get("result"):
+                tid = game["result"]["winner"]
+                wins[tid] = wins.get(tid, 0) + 1
+        winner = next((tid for tid, count in wins.items() if count >= (2 if stage == "final" else 1)), None)
+        status = "finished" if winner else games[-1]["status"] if games else "pending"
+        # A completed final game does not mean the BO3 series is finished.
+        if stage == "final" and status == "finished" and winner is None:
+            status = "pending"
+        public_games = []
+        for game in games:
+            result = game.get("result")
+            public_games.append({"id": game["id"], "round": game["round"], "status": game["status"],
+                                 "black": game["seats"]["B"]["team"], "white": game["seats"]["W"]["team"],
+                                 "winner": result["winner"] if result else None,
+                                 "points": result["points"] if result else None,
+                                 "reason": (result["reason"] if result and result["reason"] in
+                                            {"threshold", "timeout", "score"} else "referee") if result else None})
+        return {"id": f"{stage}-{number}", "stage": stage, "number": number,
+                "teams": [team(tid) for tid in tids], "games": public_games,
+                "winner": team(winner), "status": status, "wins": wins}
+
+    quarter_games = [g for g in state["games"] if g["stage"] == "quarter"]
+    quarters = []
+    for index, (a, b) in enumerate(((0, 7), (3, 4), (1, 6), (2, 5)), 1):
+        predicted = [ranked[a]["id"], ranked[b]["id"]] if len(ranked) == 8 else [None, None]
+        quarters.append(slot("quarter", index, predicted, [g for g in quarter_games if g.get("table") == index]))
+    semis = []
+    for index in range(1, 3):
+        predicted = [q["winner"]["id"] if q["winner"] else None for q in quarters[(index-1)*2:index*2]]
+        semis.append(slot("semi", index, predicted,
+                          [g for g in state["games"] if g["stage"] == "semi" and g.get("table") == index]))
+    predicted = [s["winner"]["id"] if s["winner"] else None for s in semis]
+    final = slot("final", 1, predicted, [g for g in state["games"] if g["stage"] == "final"])
+    return {"stages": [{"stage": "quarter", "label": "八強", "matches": quarters},
+                       {"stage": "semi", "label": "四強", "matches": semis},
+                       {"stage": "final", "label": "冠軍戰（三戰兩勝）", "matches": [final]}],
+            "champion": final["winner"], "swiss_rounds": SWISS_ROUNDS, "swiss_complete": complete}
 
 
 def awards(state):

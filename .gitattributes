@@ -1,0 +1,4 @@
+# Generated card bytes must match on Windows and Linux.
+TEAM-CODES.html text eol=lf
+TEAM-CODES.csv text eol=lf
+config/team-codes.csv text eol=lf

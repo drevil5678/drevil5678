@@ -37,13 +37,34 @@ async def run(port, data, team_count, board_size, visits, host="127.0.0.1"):
             "visits":visits, "threshold":.4, "allow_pass":True, "rules_confirmed":True})
         await post("/api/admin/teams/import", {"csv": "name,captain,member\n" + "\n".join(f"測試{i},甲{i},乙{i}" for i in range(team_count))})
         admin = (await client.get("/api/admin/state", headers=auth)).json()
-        for team in admin["teams"]:
-            await client.put("/api/admin/teams/"+team["id"], headers=auth, json={**team, "checked_in": True, "eligibility_checked": True})
+        assert all(team["checked_in"] and team["eligibility_checked"] for team in admin["teams"])
         await post("/api/admin/rounds/swiss")
         admin = (await client.get("/api/admin/state",headers=auth)).json()
         games = admin["games"]
+        await post("/api/admin/rounds/current/start")
         for g in games:
-            await post(f"/api/admin/games/{g['id']}/action", {"action":"start"})
+            credentials = {g["seats"][color]["team"]: g["seat_tokens"][color] for color in ("B", "W")}
+            original_black = g["seats"]["B"]["team"]
+            for _ in range(50):
+                public = (await client.get(f"/api/games/{g['id']}")).json()
+                pregame = public["pregame"]
+                attempt = pregame["attempt"]
+                for team, token in credentials.items():
+                    if not pregame["rolls"].get(team):
+                        await post(f"/api/games/{g['id']}/dice", {"attempt": attempt},
+                                   {"Authorization": "Bearer " + token})
+                public = (await client.get(f"/api/games/{g['id']}")).json()
+                if public["pregame"]["winner"]:
+                    break
+            else:
+                raise AssertionError("Dice failed to produce a non-tied result")
+            pregame = public["pregame"]
+            await post(f"/api/games/{g['id']}/color",
+                       {"color": "B" if pregame["winner"] == original_black else "W", "attempt": pregame["attempt"]},
+                       {"Authorization": "Bearer " + credentials[pregame["winner"]]})
+            for token in credentials.values():
+                await post(f"/api/games/{g['id']}/ready", {"ready": True, "attempt": pregame["attempt"]},
+                           {"Authorization": "Bearer " + token})
         latency = []
 
         async def poll(index):
@@ -89,7 +110,7 @@ async def run(port, data, team_count, board_size, visits, host="127.0.0.1"):
                 "simultaneous_games":len(games),"clients":50,"successful_requests":len(latency),
                 "http_p95_ms":round(sorted(latency)[int(len(latency)*.95)-1]*1000,1),
                 "analysis_completion_max_s":max(g["analysis_seconds"] for g in public),
-                "forbidden_move_rejected":True,"legal_move_and_next_analysis":True,"all_paused_and_backed_up":True}
+                "bulk_start_dice_color_ready":True,"forbidden_move_rejected":True,"legal_move_and_next_analysis":True,"all_paused_and_backed_up":True}
 
 
 def main():

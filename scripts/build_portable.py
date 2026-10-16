@@ -116,10 +116,13 @@ def build(output):
         shutil.copy2(ROOT/"docs/參賽者說明.md", bundle/"PLAYER-GUIDE.md")
         shutil.copy2(ROOT/"docs/18隊快速開賽.md", bundle/"18-TEAMS-SETUP.md")
         shutil.copy2(ROOT/"docs/區網練習大廳.md", bundle/"PRACTICE-LAN-SETUP.md")
+        for filename in ("TEAM-CODES.csv", "TEAM-CODES.html"):
+            shutil.copy2(ROOT/filename, bundle/filename)
         provenance.update({"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),
                            "model_purpose":"CPU development/preflight only, not formal event certification"})
         (bundle/"BUILD-INFO.json").write_text(json.dumps(provenance,indent=2)+"\n",encoding="utf-8")
-        # No live database, administrator key or player codes are ever included.
+        # Only the organizer-authorized static team codes are included;
+        # live databases and administrator credentials remain local.
         if list(bundle.rglob("*.sqlite3")) or list(bundle.rglob("admin-token")):
             raise RuntimeError("拒絕將賽事資料或管理金鑰放入發布套件")
         output.parent.mkdir(parents=True,exist_ok=True)

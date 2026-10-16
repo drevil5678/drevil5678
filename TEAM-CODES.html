@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>楊海分站賽 · 18 隊點棋碼列印卡</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #ecefea; color: #17251d; font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+    .toolbar { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
+    .toolbar h1 { margin: 0 0 8px; font-size: 24px; }
+    .toolbar p { margin: 8px 0; line-height: 1.6; }
+    button { padding: 10px 24px; font: inherit; border: 0; border-radius: 6px; background: #215d3e; color: white; cursor: pointer; }
+    .page { width: 277mm; height: 190mm; margin: 18px auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 5mm; }
+    .card { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 4mm; border: 1px dashed #69796d; background: white; break-inside: avoid; page-break-inside: avoid; }
+    .card header { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: #3f5145; }
+    .card h2 { margin: 3mm 0 2mm; font-size: 19px; line-height: 1.35; overflow-wrap: anywhere; }
+    .players { display: flex; flex-wrap: wrap; gap: 3px 16px; margin: 0; font-size: 13px; line-height: 1.5; }
+    .code { margin: 3mm 0 1mm; font: bold 22px/1.3 Consolas, "Courier New", monospace; white-space: nowrap; letter-spacing: .4px; }
+    .hint { margin: 0; font-size: 10px; line-height: 1.5; }
+    @page { size: A4 landscape; margin: 10mm; }
+    @media print {
+      body { background: white; color: black; }
+      .toolbar { display: none; }
+      .page { margin: 0; break-after: page; page-break-after: always; }
+      .page:last-child { break-after: auto; page-break-after: auto; }
+      .card { border-color: #666; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>18 隊點棋碼列印卡</h1>
+    <p>使用 A4 橫向、100% 比例列印，共 2 頁、每頁 9 張。沿虛線裁切後，每隊發一張。</p>
+    <button type="button" onclick="window.print()">列印點棋碼</button>
+  </div>
+  <section class="page" aria-label="點棋碼列印頁">
+    <article class="card" aria-label="第 01 隊 吳暫聯隊">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 01 隊</span></header>
+      <h2>吳暫聯隊</h2>
+      <p class="players"><span>隊長：吳若林</span><span>隊友：暫無</span></p>
+      <p class="code">J9Y2-L4DG-JF7L</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 02 隊 史詠棋">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 02 隊</span></header>
+      <h2>史詠棋</h2>
+      <p class="players"><span>隊長：張睿宸</span><span>隊友：吳星毅</span></p>
+      <p class="code">WBRN-K9WJ-BC7Y</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 03 隊 仁哥老師家教團隊">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 03 隊</span></header>
+      <h2>仁哥老師家教團隊</h2>
+      <p class="players"><span>隊長：黃柏賓</span><span>隊友：連家堯</span></p>
+      <p class="code">9LWY-RWFC-6ZLH</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 04 隊 邱詹聯隊">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 04 隊</span></header>
+      <h2>邱詹聯隊</h2>
+      <p class="players"><span>隊長：邱品宸</span><span>隊友：詹詠荃</span></p>
+      <p class="code">BA29-VP7J-T7WE</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 05 隊 朱吳聯隊">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 05 隊</span></header>
+      <h2>朱吳聯隊</h2>
+      <p class="players"><span>隊長：朱翊豪</span><span>隊友：吳冠傑</span></p>
+      <p class="code">YFRG-ZZLA-VR8X</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 06 隊 鍾白聯隊">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 06 隊</span></header>
+      <h2>鍾白聯隊</h2>
+      <p class="players"><span>隊長：鍾承恩</span><span>隊友：白尚平</span></p>
+      <p class="code">EZ5E-4J5U-W96H</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 07 隊 宇恩哥哥好帥">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 07 隊</span></header>
+      <h2>宇恩哥哥好帥</h2>
+      <p class="players"><span>隊長：陳彥甫</span><span>隊友：田宇恩</span></p>
+      <p class="code">SF5L-WHKH-U4EL</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 08 隊 丁何聯隊">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 08 隊</span></header>
+      <h2>丁何聯隊</h2>
+      <p class="players"><span>隊長：丁逸弘</span><span>隊友：何柏穎</span></p>
+      <p class="code">DSHD-9645-RBM3</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 09 隊 師大圍棋社">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 09 隊</span></header>
+      <h2>師大圍棋社</h2>
+      <p class="players"><span>隊長：施景堯</span><span>隊友：李雨謙</span></p>
+      <p class="code">HX3W-ZC4C-PP7J</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+  </section>
+  <section class="page" aria-label="點棋碼列印頁">
+    <article class="card" aria-label="第 10 隊 labteam">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 10 隊</span></header>
+      <h2>labteam</h2>
+      <p class="players"><span>隊長：李宜倫</span><span>隊友：劉晉翰</span></p>
+      <p class="code">4GM3-MNA6-44MG</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 11 隊 alphago">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 11 隊</span></header>
+      <h2>alphago</h2>
+      <p class="players"><span>隊長：林軒志</span><span>隊友：柯睿穎</span></p>
+      <p class="code">Q7F4-PA79-B34E</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 12 隊 隊名">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 12 隊</span></header>
+      <h2>隊名</h2>
+      <p class="players"><span>隊長：鄭又仁</span><span>隊友：楊以安</span></p>
+      <p class="code">SKRD-XV77-QHMA</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 13 隊 歐氏家族">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 13 隊</span></header>
+      <h2>歐氏家族</h2>
+      <p class="players"><span>隊長：葉愷育</span><span>隊友：歐又霖</span></p>
+      <p class="code">JCJN-SYHR-8GD4</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 14 隊 窮山惡水雙子星">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 14 隊</span></header>
+      <h2>窮山惡水雙子星</h2>
+      <p class="players"><span>隊長：林皓寬</span><span>隊友：陳顥昀</span></p>
+      <p class="code">YV84-4CE8-LQQX</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 15 隊 呵呵">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 15 隊</span></header>
+      <h2>呵呵</h2>
+      <p class="players"><span>隊長：林晸洋</span><span>隊友：王茂申</span></p>
+      <p class="code">8ZEJ-4H4B-FMZJ</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 16 隊 AlphaGo">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 16 隊</span></header>
+      <h2>AlphaGo</h2>
+      <p class="players"><span>隊長：林彥光</span><span>隊友：廖振翔</span></p>
+      <p class="code">AU3K-8ZZQ-XRZE</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 17 隊 我回歸了這次我要奪回屬於我的一切">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 17 隊</span></header>
+      <h2>我回歸了這次我要奪回屬於我的一切</h2>
+      <p class="players"><span>隊長：曾浩銘</span><span>隊友：陳浡𠄘</span></p>
+      <p class="code">WGBD-ZWQL-E34X</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+    <article class="card" aria-label="第 18 隊 火星衝衝衝">
+      <header><span>楊海分站賽 · 隊伍點棋碼</span><span>第 18 隊</span></header>
+      <h2>火星衝衝衝</h2>
+      <p class="players"><span>隊長：林恩洋</span><span>隊友：黃晨軒</span></p>
+      <p class="code">D78K-64PG-S73S</p>
+      <p class="hint">進入賽場網頁，輸入此碼查看及操作本隊棋局。</p>
+    </article>
+  </section>
+</body>
+</html>

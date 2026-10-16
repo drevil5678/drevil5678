@@ -23,7 +23,7 @@ def test_eighteen_preissued_tsv_teams_keep_codes_order_and_privacy(tmp_path):
         assert [t["name"] for t in teams] == names
         assert [t["order"] for t in teams] == list(range(1, 19))
         assert [t["play_code"] for t in teams] == codes
-        assert not any(t["checked_in"] or t["eligibility_checked"] for t in teams)
+        assert all(t["checked_in"] and t["eligibility_checked"] for t in teams)
         assert client.post("/api/admin/teams/import", headers=auth, json={"csv": roster}).status_code == 409
         assert len(app.state.store.state["teams"]) == 18
         serialized = client.get("/api/state").text + client.get("/api/admin/export", headers=auth).text
@@ -33,9 +33,8 @@ def test_eighteen_preissued_tsv_teams_keep_codes_order_and_privacy(tmp_path):
         payload = {key: first[key] for key in ("name", "players", "mars_points")}
         payload.update(checked_in=True, eligibility_checked=True)
         response = client.put(f"/api/admin/teams/{first['id']}", headers=auth, json=payload)
-        assert response.status_code == 400 and "補齊" in response.text
-        payload["players"][1] = "已補齊的隊員"
-        assert client.put(f"/api/admin/teams/{first['id']}", headers=auth, json=payload).json()["play_code"] == codes[0]
+        assert response.status_code == 200 and response.json()["players"][1] == "暫無"
+        assert response.json()["play_code"] == codes[0]
     reopened = Store(tmp_path)
     assert [t["play_code"] for t in reopened.state["teams"]] == codes
     reopened.db.close()
@@ -63,7 +62,7 @@ def test_import_rejects_duplicate_or_invalid_codes_atomically(tmp_path):
         assert app.state.store.state["teams"][1]["play_code"] != code
 
 
-def test_eighteen_teams_complete_six_swiss_rounds_without_repeat_opponents(tmp_path):
+def test_eighteen_teams_complete_five_swiss_rounds_without_repeat_opponents(tmp_path):
     app = create_app(tmp_path, engine=TestEngine())
     with TestClient(app) as client:
         auth = {"Authorization": "Bearer " + app.state.store.admin_token}
@@ -73,7 +72,7 @@ def test_eighteen_teams_complete_six_swiss_rounds_without_repeat_opponents(tmp_p
                 "checked_in": True, "eligibility_checked": True}).status_code == 200
         assert client.post("/api/admin/settings", headers=auth, json={"rules_confirmed": True}).status_code == 200
         seen = set()
-        for number in range(1, 7):
+        for number in range(1, 6):
             assert client.post("/api/admin/rounds/swiss", headers=auth).status_code == 200
             games = [g for g in app.state.store.state["games"] if g["round"] == number]
             assert len(games) == 9
@@ -87,4 +86,5 @@ def test_eighteen_teams_complete_six_swiss_rounds_without_repeat_opponents(tmp_p
                     "action": "adjudicate", "winner": game["seats"][color]["team"],
                     "points": 1.25 if index % 2 else 1, "reason": "synthetic Swiss verification"})
                 assert response.status_code == 200
-        assert len(seen) == 54
+        assert len(seen) == 45
+        assert client.post("/api/admin/rounds/swiss", headers=auth).status_code == 409

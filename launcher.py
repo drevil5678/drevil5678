@@ -141,7 +141,8 @@ def browser_when_ready(port, stop, host="127.0.0.1", view="admin"):
             with opener.open(url + "/api/health", timeout=1) as response:
                 if json.load(response).get("ok"):
                     if not stop.is_set():
-                        webbrowser.open(url + ("/#admin" if view == "admin" else "/"))
+                        suffix = {"admin": "/#admin", "integrated-practice": "/#practice"}.get(view, "/")
+                        webbrowser.open(url + suffix)
                     return
         except (OSError, ValueError):
             continue
@@ -154,14 +155,14 @@ def main(argv=None):
     mode.add_argument("--host", help="覆寫本次監聽位址，不修改設定檔")
     mode.add_argument("--lan", action="store_true", help="啟動區域網路網頁版，讓選手用瀏覽器加入")
     mode.add_argument("--practice", action="store_true", help="離線單機雙人練習，使用獨立資料與本機連線")
-    mode.add_argument("--practice-lan", action="store_true", help="區網練習大廳，玩家自助開桌，最多 15 桌，可對真人或電腦")
+    mode.add_argument("--practice-lan", action="store_true", help="開啟主站同埠練習分頁，最多 15 桌，同機雙人或對電腦")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--empty-roster", action="store_true", help="新資料庫不預載名單，供獨立測試；不刪除現有隊伍")
     parser.add_argument("--check", action="store_true", help="真實 AI 啟動診斷，不建立／更動賽事資料庫")
     parser.add_argument("--no-pause", action="store_true", help="錯誤時不等待 Enter，供自動化使用")
     args = parser.parse_args(argv)
-    practice_mode = args.practice or args.practice_lan
+    practice_mode = args.practice
     listener, stop = None, threading.Event()
     try:
         settings = load_settings(args.config)
@@ -208,7 +209,7 @@ def main(argv=None):
             backup = None if practice_mode else backup_before_start(directory)
             if backup:
                 print("已建立啟動前備份：", backup)
-            print("區網自由練習 · 最多 15 桌 · 真人／電腦對戰" if args.practice_lan else "雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽不依賴外部網路")
+            print("雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽與同機練習使用同一網址")
             print("賽事資料目錄：", directory)
             if not practice_mode:
                 print("主辦方管理金鑰檔案：", directory / "admin-token", "（請在本機安全讀取）")
@@ -216,7 +217,9 @@ def main(argv=None):
             from server.lan import network_info
             binding = {"host": listener.getsockname()[0], "port": port}
             network = network_info(binding["host"], port)
-            print("練習大廳：" if args.practice_lan else "雙人練習頁：" if practice_mode else "主辦管理頁：", network["admin_url"].replace("/#admin", "/") if practice_mode else network["admin_url"])
+            print("雙人練習頁：" if practice_mode else "主辦管理頁：", network["admin_url"].replace("/#admin", "/") if practice_mode else network["admin_url"])
+            if not practice_mode:
+                print("主站練習分頁：", network["admin_url"].replace("/#admin", "/#practice"), "（同機雙人或電腦，不可跨電腦入座）")
             for item in network["interfaces"]:
                 url = item["url"].split("/#", 1)[0] + "/" if practice_mode else item["url"]
                 print(f"{'練習' if practice_mode else '參賽'}網址（{item['name']}）：{url}")
@@ -226,20 +229,18 @@ def main(argv=None):
                 print("選手電腦只需瀏覽器。Windows 防火牆請允許活動使用的私人網路；無法連線時檢查是否在同一區網。")
             print("練習棋局請先下載 SGF 保存；停止請按 Ctrl+C。" if practice_mode else "不要關閉本視窗；停止請按 Ctrl+C，服務會保存並暫停棋局。")
             import uvicorn
-            if args.practice_lan:
-                from server.practice_lobby import create_practice_lobby
-                application = create_practice_lobby(directory, network=binding)
-            elif args.practice:
+            if args.practice:
                 from server.practice import create_practice_app
                 application = create_practice_app(directory)
             else:
                 from server.app import create_app
                 application = create_app(directory, network=binding, bootstrap=not args.empty_roster)
                 if application.state.initial_roster_loaded:
-                    print("已建立內建的 18 隊名單及本機固定點棋碼。請登入主辦管理，列印隊伍碼並補齊資料與檢錄。")
+                    print("已建立內建 18 隊及預製固定點棋碼，全隊預設完成資格確認與檢錄。可直接列印 TEAM-CODES.html。")
             config = uvicorn.Config(application, host=host, port=port, workers=1, loop="asyncio", http="h11", ws="none", access_log=False)
             if not args.no_browser and settings["open_browser"]:
-                threading.Thread(target=browser_when_ready, args=(port, stop, binding["host"], "practice" if practice_mode else "admin"), daemon=True).start()
+                view = "practice" if practice_mode else "integrated-practice" if args.practice_lan else "admin"
+                threading.Thread(target=browser_when_ready, args=(port, stop, binding["host"], view), daemon=True).start()
             uvicorn.Server(config).run(sockets=[listener])
             return 0
     except KeyboardInterrupt:
