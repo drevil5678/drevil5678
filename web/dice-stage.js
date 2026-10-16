@@ -148,7 +148,7 @@ class DiceStage {
       section.append(this.node("strong", team.name, "dice-stage-name"));
       const pair = this.node("div", undefined, "dice-pair");
       pair.append(this.die(values?.[0], rolling, "0"), this.die(values?.[1], rolling, "1"));
-      section.append(pair, this.node("p", rolling ? "擲骰中…" : values ? `${values[0]} + ${values[1]} = ${values[0] + values[1]} 點` : "等待對手擲骰", "dice-stage-total"));
+      section.append(pair, this.node("p", rolling ? "擲骰中…" : values ? `${values[0]} + ${values[1]} = ${values[0] + values[1]} 點` : "尚未擲骰", "dice-stage-total"));
       teams.append(section);
     }
     card.append(teams);
@@ -159,7 +159,7 @@ class DiceStage {
     else if (rolls.every(Boolean)) {
       const sums = rolls.map(values => values[0] + values[1]);
       summary.textContent = sums[0] === sums[1] ? "同點！確認結果後，再擲一次。" : `${current.teams[sums[0] > sums[1] ? 0 : 1].name} 點數較高，可選擇黑白。`;
-    } else summary.textContent = "你的點數已揭曉，等待另一隊擲骰。";
+    } else summary.textContent = "已揭曉一隊的點數，確認後繼續猜先。";
     const confirm = this.node("button", "確定", "dice-confirm");
     confirm.id = "dice-confirm";
     confirm.type = "button";
