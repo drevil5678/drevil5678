@@ -142,7 +142,7 @@ function renderArena() {
   const s = snapshot.settings;
   $("guide-settings").textContent = `本場 ${s.board_size} 路 · 黑貼 ${s.komi} 目 · ${s.rules === "chinese" ? "中國" : "日本"}規則。勝率已計入此貼目；從第 ${s.loss_start_ply} 手起，連續 ${s.loss_turns} 個自身回合 ≤ ${(s.threshold * 100).toFixed(2)}% 判負。${s.allow_pass ? "允許停一手，雙方連續停一手後依棋盤現況自動計分，不另移除死子。" : "本場不允許停一手。"}`;
   $("guide-clock").textContent = snapshot.knockout
-    ? "八強、四強與冠軍戰每局每隊均為 10 分鐘，攜帶電子產品者為 5 分鐘。"
+    ? "四強與冠軍戰每局每隊均為 10 分鐘，攜帶電子產品者為 5 分鐘。"
     : "開賽前決定是否參考自備設備。一般賽局每方 10 分鐘，使用自備設備為 5 分鐘；冠軍戰為 15 分鐘，使用自備設備為 10 分鐘。";
   $("rules-summary").replaceChildren(
     ...[

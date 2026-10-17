@@ -1,6 +1,6 @@
 # 從 GitHub 下載 Windows v0.8.1
 
-若要自行輸入八隊、只有冠軍戰三戰兩勝的單機淘汰賽，請選 **yanghai-windows-knockout-v0.8.1-port8001**。完整解壓後雙擊 **YanghaiKnockout.exe**，詳見[八強淘汰賽單機版](八強淘汰賽單機版.md)。
+若要四隊直接打四強的單機版，請選 **yanghai-windows-final-four-port8001**。完整解壓後雙擊 **Start-FinalFour-8001.cmd**，網址為 `http://127.0.0.1:8001`。四強一戰決勝，冠軍戰三戰兩勝，詳見[四強賽單機版](四強賽單機版.md)。
 
 若要一台電腦給兩隊比賽的離線備援，請在同一個成功紀錄的 Artifacts 選 **yanghai-windows-duel-v0.8.1**。完整解壓後雙擊 **YanghaiDuel.exe**，不需要啟動 LAN 版。詳見[單機雙隊備用版](單機雙隊備用版.md)。
 

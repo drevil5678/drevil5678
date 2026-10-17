@@ -8,17 +8,13 @@ class KnockoutMode {
     if (!this.enabled) {
       this.enabled = true;
       document.body.classList.add("knockout-mode");
-      $("bracket-description").textContent = "依輸入順序相鄰配對；八強、四強一局定勝負，只有冠軍戰三戰兩勝。勝隊自動帶入下一階段。";
+      $("bracket-description").textContent = "四強一戰決勝；兩場勝隊進入冠軍戰，三戰兩勝決定冠軍。";
       const setup = el("article", undefined, "panel"); setup.id = "knockout-setup";
-      setup.innerHTML = `<h2>輸入八強隊名</h2><p>第 1 隊對第 2 隊、第 3 隊對第 4 隊，依此類推。建立後隊名與規則鎖定，請先核對配對順序。</p>
+      setup.innerHTML = `<h2>輸入四個隊名</h2><p>四強第 1 組：第 1 隊對第 2 隊；第 2 組：第 3 隊對第 4 隊。請核對後建立對決圖。</p>
         <form id="knockout-form" class="form-grid">
-        ${Array.from({length:8},(_,index)=>`<label>第 ${index+1} 隊（八強第 ${Math.floor(index/2)+1} 組）<input name="team${index+1}" maxlength="60" required></label>`).join("")}
-        <label>棋盤<select name="board_size"><option value="19">19 路</option><option value="13">13 路</option><option value="9">9 路</option></select></label>
-        <label>黑棋貼目<input name="komi" type="number" value="7.5" step="0.5" min="-50" max="50" required></label>
-        <label>規則<select name="rules"><option value="chinese">中國規則</option><option value="japanese">日本規則</option></select></label>
-        <label>AI visits<input name="visits" type="number" value="128" min="16" max="100000" required></label>
-        <label class="check span"><input name="rules_confirmed" type="checkbox" required>已核對隊名、配對順序與規則；禁止 AI 最佳落點，第 61 手起連續三個自身回合 ≤ 40% 判負，雙方虛手依棋盤現況計分</label>
-        <button type="submit">建立八強對決圖</button></form>`;
+        ${Array.from({length:4},(_,index)=>`<label>第 ${index+1} 隊（四強第 ${Math.floor(index/2)+1} 組）<input name="team${index+1}" maxlength="60" required></label>`).join("")}
+        <p class="span">19 路、黑貼 7.5 目、中國規則；每局每隊 10 分鐘，攜帶電子產品者 5 分鐘。</p>
+        <button type="submit">建立四強對決圖</button></form>`;
       document.querySelector("#arena .heading").after(setup);
       const matches = el("section"); matches.id = "knockout-matches"; setup.after(matches);
       const download = el("a", "下載整屆淘汰賽紀錄（JSON）", "download"); download.href = "/api/duel/export"; matches.after(download);
@@ -30,16 +26,14 @@ class KnockoutMode {
           try {
             const fields = event.target.elements;
             await api("/api/knockout/setup", {method:"POST",body:{
-              names:Array.from({length:8},(_,index)=>fields[`team${index+1}`].value),
-              board_size:Number(fields.board_size.value),komi:Number(fields.komi.value),
-              rules:fields.rules.value,visits:Number(fields.visits.value),rules_confirmed:fields.rules_confirmed.checked,
+              names:Array.from({length:4},(_,index)=>fields[`team${index+1}`].value),
+              rules_confirmed:true,
             }});
             snapshot = await api("/api/state"); this.sync(snapshot); renderArena();
-            notice("八強對決圖已建立，請選擇要進行的對戰。");
+            notice("四強對決圖已建立，請選擇要進行的對戰。");
           } finally { this.busy = false; event.target.querySelector("button").disabled = false; }
         });
       };
-      for (const key of ["board_size", "komi", "rules", "visits"]) $("knockout-form").elements[key].value = state.settings[key];
     }
     $("knockout-setup").classList.toggle("hidden",state.knockout.initialized);
     const tree = state.bracket, active = state.games.find(game=>game.status!=="finished");
@@ -48,7 +42,7 @@ class KnockoutMode {
     const target=$("knockout-matches"); target.replaceChildren();
     if (tree.champion) target.append(el("p", `冠軍：${tree.champion.name}`, "champion-banner"));
     if (!state.knockout.initialized) return;
-    target.append(el("p", "八強、四強與冠軍戰每局每隊均為 10 分鐘（攜帶電子產品者 5 分鐘）。每局開啟前確認設備選項。"));
+    target.append(el("p", "四強與冠軍戰每局每隊均為 10 分鐘（攜帶電子產品者 5 分鐘）。每局開啟前確認設備選項。"));
     for (const stage of tree.stages) {
       target.append(el("h2", stage.label));
       const grid=el("div",undefined,"grid");

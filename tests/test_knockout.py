@@ -9,7 +9,7 @@ from tests.test_app import TestEngine
 
 def initialize(client, **extra):
     return client.post("/api/knockout/setup", json={
-        "names": [f"隊伍{index}" for index in range(1, 9)], "board_size": 9,
+        "names": [f"隊伍{index}" for index in range(1, 5)], "board_size": 9,
         "visits": 16, "rules_confirmed": True, **extra,
     })
 
@@ -34,34 +34,35 @@ def test_manual_names_pair_order_and_bad_setup_cannot_overwrite(tmp_path):
     app = create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True, bootstrap=True)
     with TestClient(app) as client:
         assert not client.get("/api/state").json()["teams"]
-        for names in (["同名"] * 8, ["一隊"] * 7 + ["  "], ["甲"] * 7 + ["長" * 61]):
+        for names in (["同名"] * 4, ["一隊", "二隊", "三隊", "  "], ["一隊", "二隊", "三隊", "長" * 61]):
             assert initialize(client, names=names).status_code == 400
+        for count in (0, 3, 5, 8):
+            assert initialize(client, names=[f"隊伍{i}" for i in range(count)]).status_code == 422
         assert not app.state.store.state["teams"]
         assert initialize(client).status_code == 200
         tree = client.get("/api/bracket").json()
         assert [[team["name"] for team in match["teams"]] for match in tree["stages"][0]["matches"]] == [
-            ["隊伍1", "隊伍2"], ["隊伍3", "隊伍4"], ["隊伍5", "隊伍6"], ["隊伍7", "隊伍8"]]
+            ["隊伍1", "隊伍2"], ["隊伍3", "隊伍4"]]
+        assert [stage["stage"] for stage in tree["stages"]] == ["semi", "final"]
         assert all(team is None for stage in tree["stages"][1:] for match in stage["matches"] for team in match["teams"])
         assert initialize(client).status_code == 409
         assert client.post("/api/duel/new", json={"rules_confirmed": True}).status_code == 409
-        assert len(app.state.store.state["teams"]) == 8
+        assert len(app.state.store.state["teams"]) == 4
 
 
 @pytest.mark.parametrize("split_final", [False, True], ids=["final-2-0", "final-2-1"])
-def test_quarter_and_semi_bo1_final_bo3_and_single_point25_win(tmp_path, split_final):
+def test_semi_bo1_final_bo3_and_single_point25_win(tmp_path, split_final):
     app = create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True)
     with TestClient(app) as client:
         assert initialize(client).status_code == 200
-        for ident in ("semi-1", "final-1"):
+        for ident in ("quarter-1", "final-1"):
             assert client.post(f"/api/knockout/matches/{ident}/next", json={}).status_code == 409
-        quarters = [win(client, f"quarter-{index}")[1] for index in range(1, 5)]
-        assert find(client, "quarter-1")["winner"]["id"] == quarters[0]
-        assert client.post("/api/knockout/matches/quarter-1/next", json={}).status_code == 409
         _, first = win(client, "semi-1", points=1.25)
         semi = find(client, "semi-1")
         assert semi["best_of"] == 1 and semi["wins"][first] == 1
         assert semi["winner"]["id"] == first
         assert find(client, "final-1")["teams"][0]["id"] == first
+        assert client.post("/api/knockout/matches/final-1/next", json={}).status_code == 409
         assert client.post("/api/knockout/matches/semi-1/next", json={}).status_code == 409
         semi2 = find(client, "semi-2")
         b = semi2["teams"][1]["id"]
@@ -81,7 +82,7 @@ def test_quarter_and_semi_bo1_final_bo3_and_single_point25_win(tmp_path, split_f
         assert client.get("/api/bracket").json()["champion"]["id"] == b
         assert client.post("/api/knockout/matches/final-1/next", json={}).status_code == 409
         exported = client.get("/api/duel/export")
-        assert "knockout-records.json" in exported.headers["content-disposition"]
+        assert "final-four-records.json" in exported.headers["content-disposition"]
         assert exported.json()["awards"] == []
 
 
@@ -90,7 +91,7 @@ def test_only_one_active_board_even_for_concurrent_match_requests(tmp_path):
     with TestClient(app) as client:
         assert initialize(client).status_code == 200
         with ThreadPoolExecutor(max_workers=4) as executor:
-            responses = list(executor.map(lambda index: client.post(f"/api/knockout/matches/quarter-{index}/next", json={}), range(1, 5)))
+            responses = list(executor.map(lambda index: client.post(f"/api/knockout/matches/semi-{index}/next", json={}), [1, 1, 2, 2]))
         assert sorted(response.status_code for response in responses) == [200, 409, 409, 409]
         assert len(app.state.store.state["games"]) == 1
 
@@ -99,34 +100,15 @@ def test_series_and_names_survive_restart_without_new_roster(tmp_path):
     app = create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True)
     with TestClient(app) as client:
         assert initialize(client).status_code == 200
-        for index in range(1, 5):
-            win(client, f"quarter-{index}")
         win(client, "semi-1")
         win(client, "semi-2")
         _, winner = win(client, "final-1")
         before = client.get("/api/bracket").json()
     with TestClient(create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True, bootstrap=True)) as client:
         assert client.get("/api/bracket").json() == before
-        assert len(client.get("/api/state").json()["teams"]) == 8
+        assert len(client.get("/api/state").json()["teams"]) == 4
         win(client, "final-1", winner)
         assert client.get("/api/bracket").json()["champion"]["id"] == winner
-
-
-def test_upgrade_preserves_started_legacy_semi_but_updates_unstarted_semi(tmp_path):
-    app = create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True)
-    with TestClient(app) as client:
-        assert initialize(client).status_code == 200
-        for index in range(1, 5):
-            win(client, f"quarter-{index}")
-        _, winner = win(client, "semi-1")
-        # Model a saved v0.8.0 event: this semifinal was opened as BO3.
-        app.state.store.state["games"][-1]["knockout_best_of"] = 3
-        app.state.store.state["knockout"]["best_of"]["semi"] = 3
-        assert find(client, "semi-1")["winner"] is None
-        assert find(client, "semi-1")["best_of"] == 3
-        assert find(client, "semi-2")["best_of"] == 1
-        win(client, "semi-1", winner)
-        assert find(client, "semi-1")["winner"]["id"] == winner
 
 
 def test_knockout_routes_are_unavailable_in_regular_app_and_remote_peers(tmp_path):

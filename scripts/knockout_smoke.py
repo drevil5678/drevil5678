@@ -1,8 +1,9 @@
-"""Verify the eight-team executable: real AI, restart, BO3 and isolated data."""
+"""Verify four-team startup, real AI, restart, final BO3 and isolated data."""
 import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,33 +20,37 @@ def main(executable=None, port=None):
     from launcher import defaults
     explicit_port = port
     port = port or 8001
-    with tempfile.TemporaryDirectory(prefix="yanghai-knockout-") as directory:
+    with tempfile.TemporaryDirectory(prefix="yanghai-final-four-") as directory:
         temp = Path(directory)
+        program = temp / "four team event"
+        if executable:
+            executable = Path(executable).resolve()
+            shutil.copytree(executable.parent, program)
+            config = program / "final-four.json"
+            assert not config.exists(), "package must start with a fresh four-team configuration"
+            # Exercise the actual double-click entry point, including spaces in its path.
+            starter = program / "Start-FinalFour-8001.cmd"
+            command = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "call", str(starter), "--no-browser"]
+            original_config = None
+        else:
+            program.mkdir()
+            settings = defaults()
+            for key in ("katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
+                settings[key] = str(ROOT / settings[key])
+            settings.update(data_dir=str(program / "data"), open_browser=False, host="0.0.0.0", port=8001)
+            config = program / "final-four.json"
+            original_config = json.dumps(settings)
+            config.write_text(original_config, encoding="utf-8")
+            command = [sys.executable, str(ROOT / "launcher.py"), "--final-four", "--config", str(config), "--no-browser", "--no-pause"]
+        if explicit_port is not None:
+            command += ["--port", str(port)]
         originals = {}
-        for name in ("data", "duel-data"):
-            folder = temp / name
+        for name in ("data", "duel-data", "knockout-data"):
+            folder = program / name
             folder.mkdir()
             marker = folder / "tournament.sqlite3"
             marker.write_bytes((name + " must remain untouched").encode())
             originals[marker] = marker.read_bytes()
-        settings = defaults()
-        if executable:
-            executable = Path(executable).resolve()
-            bundle = executable.parent
-            settings.update(katago_bin="katago/katago.exe", katago_model="model/model.txt.gz", katago_config="config/analysis.cfg")
-            command = [str(executable)]  # The executable's name selects the mode.
-        else:
-            bundle = ROOT
-            command = [sys.executable, str(ROOT / "launcher.py"), "--knockout"]
-        for key in ("katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
-            settings[key] = str(bundle / settings[key])
-        settings.update(data_dir=str(temp / "data"), open_browser=False, host="0.0.0.0")
-        config = temp / "knockout.json"
-        original_config = json.dumps(settings)
-        config.write_text(original_config, encoding="utf-8")
-        command += ["--config", str(config), "--no-browser", "--no-pause"]
-        if explicit_port is not None:
-            command += ["--port", str(port)]
         environment = os.environ.copy()
         for key in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "KATAGO_ENGINE_MODE", "TOURNAMENT_DATA",
                     "AI_CONCURRENCY", "KATAGO_GPU_BIN", "KATAGO_GPU_CONFIG", "AI_GPU_CONCURRENCY", "KATAGO_GPU_DEVICE"):
@@ -69,6 +74,10 @@ def main(executable=None, port=None):
                             time.sleep(.2)
                         else:
                             raise AssertionError("knockout executable did not start")
+                        if original_config is None:
+                            original_config = config.read_text(encoding="utf-8")
+                            assert json.loads(original_config)["port"] == 8001
+                        assert (program / "final-four-data/tournament.sqlite3").exists()
                         assert client.get("/").status_code == client.get("/static/knockout.js").status_code == 200
                         assert client.get("/api/state", headers={"Host": "evil.example"}).status_code == 403
 
@@ -100,10 +109,10 @@ def main(executable=None, port=None):
 
                         if launch == 0:
                             assert state()["teams"] == []
-                            names = [f"自填隊伍{index}" for index in range(1, 9)]
+                            names = [f"自填隊伍{index}" for index in range(1, 5)]
                             post("/api/knockout/setup", {"names": names, "board_size": 9, "komi": 7.5, "visits": 32, "rules_confirmed": True})
                             assert [team["name"] for team in state()["teams"]] == names
-                            game = post("/api/knockout/matches/quarter-1/next", {})
+                            game = post("/api/knockout/matches/semi-1/next", {})
                             gid = game["id"]
                             credentials = state()["duel"]["credentials"][gid]
                             for _ in range(50):
@@ -127,7 +136,7 @@ def main(executable=None, port=None):
                                 post(f"/api/games/{gid}/move", {"version": game["version"], "move": game["candidates"][1]["move"]}, token)
                                 game = wait_game(gid)
                             saved_board = game["board"]
-                            post(f"/api/duel/games/{gid}/action", {"action": "pause", "reason": "八強備用版重啟檢查"})
+                            post(f"/api/duel/games/{gid}/action", {"action": "pause", "reason": "四強版重啟檢查"})
                         else:
                             game = state()["games"][0]
                             assert game["id"] == gid and game["board"] == saved_board and game["status"] == "paused"
@@ -139,11 +148,9 @@ def main(executable=None, port=None):
                                 game = post(f"/api/games/{gid}/move", {"version": game["version"], "move": "pass"}, token)
                                 if game["status"] != "finished":
                                     game = wait_game(gid)
-                            assert game["result"]["reason"] == "score" and match("quarter-1")["winner"]
+                            assert game["result"]["reason"] == "score" and match("semi-1")["winner"]
                             assert "KM[7.5]" in client.get(f"/api/games/{gid}/sgf").text
-                            for index in (2, 3, 4):
-                                host_win(f"quarter-{index}")
-                            _, a = host_win("semi-1")
+                            a = game["result"]["winner"]
                             assert match("semi-1")["winner"]["id"] == a
                             assert match("semi-1")["best_of"] == 1
                             assert client.post("/api/knockout/matches/semi-1/next", json={}).status_code == 409
@@ -157,7 +164,7 @@ def main(executable=None, port=None):
                             assert client.get("/api/bracket").json()["champion"]["id"] == c
                             assert client.post("/api/knockout/matches/final-1/next", json={}).status_code == 409
                             exported = client.get("/api/duel/export").json()
-                            assert len(exported["games"]) == 8 and exported["awards"] == []
+                            assert len(exported["games"]) == 4 and exported["awards"] == []
                             assert all("token" not in seat for game in exported["games"] for seat in game["seats"].values())
                         assert all(marker.read_bytes() == original for marker, original in originals.items())
                         assert config.read_text(encoding="utf-8") == original_config
@@ -168,8 +175,10 @@ def main(executable=None, port=None):
                     stop(process)
         report = {"passed": True, "packaged_app": bool(executable), "platform": sys.platform,
                   "port": port, "default_port": explicit_port is None,
+                  "entrypoint": "Windows CMD" if executable else "source",
+                  "fresh_configuration_port": 8001, "isolated_final_four_data": True,
                   "real_ai_games": 1, "other_games": "organizer adjudication to verify advancement",
-                  "manual_eight_names": True, "quarter_and_semifinal_bo1": True, "final_bo3": True,
+                  "manual_four_names": True, "semifinal_bo1": True, "final_bo3": True,
                   "final_ten_five_minutes": True,
                   "final_two_zero": True, "restart_preserves_board_and_names": True,
                   "champion_recorded": True, "sgf_and_json": True, "formal_and_duel_data_untouched": True}

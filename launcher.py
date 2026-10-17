@@ -188,7 +188,7 @@ def main(argv=None):
     mode.add_argument("--practice", action="store_true", help="離線單機雙人練習，使用獨立資料與本機連線")
     mode.add_argument("--practice-lan", action="store_true", help="開啟主站同埠練習分頁，每個瀏覽器一桌，同機雙人或對電腦")
     mode.add_argument("--duel", action="store_true", help="離線單機雙隊 PK，沿用正式規則並獨立保存棋局")
-    mode.add_argument("--knockout", action="store_true", help="單機八強淘汰賽，自填八隊，僅冠軍戰三戰兩勝")
+    mode.add_argument("--final-four", "--knockout", dest="knockout", action="store_true", help="單機四強賽，自填四隊，四強一戰決勝、冠軍戰三戰兩勝")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--empty-roster", action="store_true", help="新資料庫不預載名單，供獨立測試；不刪除現有隊伍")
@@ -203,7 +203,7 @@ def main(argv=None):
     practice_mode = args.practice
     listener, stop = None, threading.Event()
     try:
-        settings = load_settings(args.config or base_directory()/("knockout.json" if args.knockout else "duel.json" if args.duel else "tournament.json"),
+        settings = load_settings(args.config or base_directory()/("final-four.json" if args.knockout else "duel.json" if args.duel else "tournament.json"),
                                  default_port=8001 if args.knockout else None)
         local_mode = args.practice or args.duel or args.knockout
         host = "127.0.0.1" if local_mode else "0.0.0.0" if args.lan or args.practice_lan else args.host if args.host is not None else settings["host"]
@@ -215,8 +215,8 @@ def main(argv=None):
         os.environ["AUTO_BACKUP_SECONDS"] = str(settings["auto_backup_seconds"])
         directory = Path(settings["data_dir"])
         if args.knockout:
-            knockout_directory = directory.parent/"knockout-data"
-            directory = knockout_directory if knockout_directory != directory else directory.parent/"knockout-only"
+            knockout_directory = directory.parent/"final-four-data"
+            directory = knockout_directory if knockout_directory != directory else directory.parent/"final-four-only"
             os.environ["TOURNAMENT_DATA"] = str(directory)
         if args.duel:
             duel_directory = directory.parent/"duel-data"
@@ -269,7 +269,7 @@ def main(argv=None):
             backup = None if practice_mode else backup_before_start(directory)
             if backup:
                 print("已建立啟動前備份：", backup)
-            print("單機八強淘汰賽 · 僅冠軍戰三戰兩勝 · 獨立保存" if args.knockout else "單機雙隊 PK · 正式規則 · 備用紀錄獨立保存" if args.duel else "雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽與同機練習使用同一網址")
+            print("單機四強賽 · 四強一戰決勝 · 冠軍戰三戰兩勝" if args.knockout else "單機雙隊 PK · 正式規則 · 備用紀錄獨立保存" if args.duel else "雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽與同機練習使用同一網址")
             print("賽事資料目錄：", directory)
             if not local_mode:
                 print("主辦方管理金鑰檔案：", directory / "admin-token", "（請在本機安全讀取）")
@@ -277,7 +277,7 @@ def main(argv=None):
             from server.lan import network_info
             binding = {"host": listener.getsockname()[0], "port": port}
             network = network_info(binding["host"], port)
-            print("八強淘汰賽頁：" if args.knockout else "單機 PK 頁：" if args.duel else "雙人練習頁：" if practice_mode else "主辦管理頁：", network["admin_url"].replace("/#admin", "/") if local_mode else network["admin_url"])
+            print("四強賽頁：" if args.knockout else "單機 PK 頁：" if args.duel else "雙人練習頁：" if practice_mode else "主辦管理頁：", network["admin_url"].replace("/#admin", "/") if local_mode else network["admin_url"])
             if not local_mode:
                 print("主站練習分頁：", network["admin_url"].replace("/#admin", "/#practice"), "（同機雙人或電腦，不可跨電腦入座）")
             for item in network["interfaces"]:
@@ -330,6 +330,6 @@ if __name__ == "__main__":
     arguments = sys.argv[1:]
     if Path(sys.executable).stem.lower() == "yanghaiduel":
         arguments = ["--duel", *arguments]
-    elif Path(sys.executable).stem.lower() == "yanghaiknockout":
+    elif Path(sys.executable).stem.lower() in ("yanghaifinalfour", "yanghaiknockout"):
         arguments = ["--knockout", *arguments]
     raise SystemExit(main(arguments))

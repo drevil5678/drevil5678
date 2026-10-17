@@ -15,7 +15,7 @@ def build(source, output, knockout=False):
     if provenance["os"] != "Windows":
         raise RuntimeError("Windows 執行檔必須由真正的 Windows 建置產生")
     required = ["_internal", "katago", "model", "config", "BUILD-INFO.json"]
-    required += (["YanghaiKnockout.exe", "Start-Knockout-Offline.cmd", "KNOCKOUT-READ-ME.md"] if knockout
+    required += (["YanghaiFinalFour.exe", "Start-FinalFour-8001.cmd", "FINAL-FOUR-READ-ME.md"] if knockout
                  else ["YanghaiDuel.exe", "Start-Duel-Offline.cmd", "DUEL-READ-ME.md"])
     if any(not (source / item).exists() for item in required):
         raise RuntimeError("Windows 建置缺少單機備用版所需檔案")
@@ -32,7 +32,7 @@ def build(source, output, knockout=False):
     shutil.make_archive(str(output), "zip", root_dir=output.parent, base_dir=output.name)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_suffix(".zip.sha256").write_text(digest + "  " + archive.name + "\n", encoding="utf-8")
-    print(json.dumps({"archive": str(archive), "sha256": digest, "mode": "offline-knockout" if knockout else "offline-duel", "backend": "CPU"}))
+    print(json.dumps({"archive": str(archive), "sha256": digest, "mode": "offline-final-four" if knockout else "offline-duel", "backend": "CPU"}))
 
 
 if __name__ == "__main__":

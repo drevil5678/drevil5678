@@ -103,7 +103,7 @@ class DuelInput(SettingsInput):
 
 
 class KnockoutSetup(SettingsInput):
-    names: list[str] = Field(min_length=8, max_length=8)
+    names: list[str] = Field(min_length=4, max_length=4)
 
 
 class KnockoutGame(BaseModel):
@@ -628,22 +628,22 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
         async def knockout_setup(body: KnockoutSetup, authorization: str | None = Header(None)):
             require_knockout_host(authorization)
             names = [name.strip() for name in body.names]
-            if any(not name or len(name) > 60 for name in names) or len(set(names)) != 8:
-                raise HTTPException(400, "請輸入八個不同的隊名，每個隊名最多 60 字")
+            if any(not name or len(name) > 60 for name in names) or len(set(names)) != 4:
+                raise HTTPException(400, "請輸入四個不同的隊名，每個隊名最多 60 字")
             if (body.board_size not in (9, 13, 19) or body.rules not in ("chinese", "japanese")
                     or not math.isfinite(body.komi) or body.threshold != .40 or not body.allow_pass
                     or not body.rules_confirmed):
                 raise HTTPException(400, "請確認棋盤、貼目與規則；本版固定 40% 門檻並允許虛手")
             async with lock:
                 if state.get("knockout") or state["teams"] or state["games"] or state["rounds"]:
-                    raise HTTPException(409, "本屆八強已建立，保留原隊名與賽果；新賽事請使用新的資料夾")
+                    raise HTTPException(409, "本屆四強已建立，保留原隊名與賽果；新賽事請使用新的資料夾")
                 state["settings"].update(body.model_dump(include=set(SettingsInput.model_fields)))
                 for index, name in enumerate(names, 1):
                     state["teams"].append({"id": uuid.uuid4().hex[:12], "name": name, "players": ["隊長", "隊員"],
                         "mars_points": [0, 0], "checked_in": True, "eligibility_checked": True, "order": index,
                         "play_code": new_team_code(team["play_code"] for team in state["teams"])})
                 state["knockout"] = {"entrants": [team["id"] for team in state["teams"]],
-                                      "best_of": {"quarter": 1, "semi": 1, "final": 3}}
+                                      "best_of": {"semi": 1, "final": 3}}
                 event("knockout_setup", {"teams": names, "best_of": state["knockout"]["best_of"]})
                 store.save()
                 return event_bracket()
@@ -676,7 +676,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
         @app.post("/api/duel/new")
         async def new_duel(body: DuelInput):
             if knockout:
-                raise HTTPException(409, "八強版請從對決圖建立下一局")
+                raise HTTPException(409, "四強版請從對決圖建立下一局")
             # Use the same game, dice, clock and AI implementation as the LAN
             # event. The launcher supplies a completely separate data directory.
             settings = body.model_dump(include=set(SettingsInput.model_fields))
@@ -723,14 +723,14 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
         @app.get("/api/duel/export")
         async def duel_export():
             response = await export("Bearer " + store.admin_token)
-            response.headers["Content-Disposition"] = 'attachment; filename="knockout-records.json"' if knockout else 'attachment; filename="duel-records.json"'
+            response.headers["Content-Disposition"] = 'attachment; filename="final-four-records.json"' if knockout else 'attachment; filename="duel-records.json"'
             return response
 
     @app.post("/api/admin/special-tables")
     async def special_table(body: SpecialInput, authorization: str | None = Header(None)):
         require_admin(authorization)
         if knockout:
-            raise HTTPException(409, "八強版請從對決圖建立對戰")
+            raise HTTPException(409, "四強版請從對決圖建立對戰")
         async with lock:
             if not state["settings"]["rules_confirmed"]:
                 raise HTTPException(409, "請先在設定頁確認正式規則")
@@ -772,7 +772,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
     async def next_round(kind: str, authorization: str | None = Header(None)):
         require_admin(authorization)
         if knockout:
-            raise HTTPException(409, "獨立八強版不使用瑞士賽，請從對決圖建立下一局")
+            raise HTTPException(409, "獨立四強版不使用瑞士賽，請從對決圖建立下一局")
         async with lock:
             if not state["settings"]["rules_confirmed"]:
                 raise HTTPException(409, "請先在設定頁確認正式規則")

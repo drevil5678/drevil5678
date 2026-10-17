@@ -1,4 +1,4 @@
-"""Independent eight-team bracket: quarterfinal/semifinal BO1, final BO3."""
+"""Independent four-team bracket: semifinal BO1, final BO3."""
 
 
 def bracket(state):
@@ -9,9 +9,7 @@ def bracket(state):
         ident = f"{stage}-{number}"
         games = sorted((g for g in state["games"] if g.get("knockout_match") == ident), key=lambda g: g["round"])
         wins = {tid: 0 for tid in tids if tid}
-        # Preserve the format of already-started v0.8.0 semifinals on upgrade.
-        legacy_semi = stage == "semi" and any(game.get("knockout_best_of") == 3 for game in games)
-        required = 2 if stage == "final" or legacy_semi else 1
+        required = 2 if stage == "final" else 1
         for game in games:
             if game.get("result"):
                 winner = game["result"]["winner"]
@@ -28,15 +26,11 @@ def bracket(state):
                            "points": game["result"]["points"] if game.get("result") else None,
                            "reason": game["result"]["reason"] if game.get("result") else None} for game in games]}
 
-    quarters = [slot("quarter", index + 1, entrants[index*2:index*2+2] if entrants else [None, None]) for index in range(4)]
-    semis = [slot("semi", index + 1, [match["winner"]["id"] if match["winner"] else None
-                                      for match in quarters[index*2:index*2+2]]) for index in range(2)]
+    semis = [slot("semi", index + 1, entrants[index*2:index*2+2] if entrants else [None, None]) for index in range(2)]
     final = slot("final", 1, [match["winner"]["id"] if match["winner"] else None for match in semis])
-    return {"stages": [{"stage": "quarter", "label": "八強（一局定勝負）", "matches": quarters},
-                       {"stage": "semi", "label": "四強（已開賽對戰沿用原賽制）" if any(match["best_of"] == 3 for match in semis)
-                        else "四強（一局定勝負）", "matches": semis},
+    return {"stages": [{"stage": "semi", "label": "四強（一戰決勝）", "matches": semis},
                        {"stage": "final", "label": "冠軍戰（三戰兩勝）", "matches": [final]}],
-            "champion": final["winner"], "knockout": True, "initialized": len(entrants) == 8,
+            "champion": final["winner"], "knockout": True, "initialized": len(entrants) == 4,
             "swiss_rounds": 0, "swiss_complete": False}
 
 
