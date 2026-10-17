@@ -24,8 +24,10 @@ let snapshot,
   receivedAt,
   currentView = "arena";
 let networkState;
+let moveBusy = false;
 let bracketState, rollingTeam = null, pregameBusy = false;
-const diceStage = new DiceStage(() => renderPregame());
+const diceStage = new DiceStage(() => snapshot?.duel ? renderMatch() : renderPregame());
+const duelMode = new DuelMode();
 let selectedRecordTeam = sessionStorage.getItem("teamId") || null;
 let adminToken = sessionStorage.getItem("adminToken") || "",
   seatToken = "",
@@ -81,6 +83,7 @@ async function api(path, { method = "GET", body, token } = {}) {
   return response.json();
 }
 function showView(view) {
+  if (snapshot?.duel && !["arena", "match"].includes(view)) view = "arena";
   currentView = view;
   document
     .querySelectorAll(".view")
@@ -154,7 +157,7 @@ function renderArena() {
     const card = el("article", undefined, "game-card");
     card.dataset.gameId = g.id;
     card.append(
-      el("span", `${stages[g.stage] || "對戰"} · TABLE ${String(g.table).padStart(2, "0")}`, "eyebrow"),
+      el("span", `${snapshot.duel ? g.championship_clock ? "冠軍戰單局" : "備用對戰" : stages[g.stage] || "對戰"} · TABLE ${String(g.table).padStart(2, "0")}`, "eyebrow"),
       el("h3", `${g.seats.B.name}  vs  ${g.seats.W.name}`),
       el("span", gameStatus(g), "badge"),
       el(
@@ -297,6 +300,7 @@ async function openGame(id) {
     .forEach((s) => s.classList.toggle("hidden", s.id !== "match"));
   location.hash = "game/" + id;
   await refreshGame();
+  if (snapshot?.duel) return;
   const teamId = sessionStorage.getItem("teamId"), code = sessionStorage.getItem("teamCode");
   if (code && Object.values(currentGame.seats).some(s => s.team === teamId)) seatToken = code;
   $("seat-token").value = seatToken;
@@ -305,7 +309,8 @@ async function openGame(id) {
 async function refreshGame() {
   if (!selectedGame) return;
   currentGame = await api("/api/games/" + selectedGame);
-  if (seatTeam) seatColor = ["B", "W"].find(color => currentGame.seats[color].team === seatTeam) || null;
+  if (snapshot?.duel) duelMode.selectSeat(currentGame);
+  else if (seatTeam) seatColor = ["B", "W"].find(color => currentGame.seats[color].team === seatTeam) || null;
   receivedAt = performance.now();
   if (currentGame.version !== lastVersion) {
     selected = null;
@@ -316,11 +321,12 @@ async function refreshGame() {
 function renderMatch() {
   const g = currentGame;
   if (!g) return;
+  if (snapshot?.duel) duelMode.selectSeat(g);
   $("match-title").replaceChildren(
     el("h1", `${g.seats.B.name}　vs　${g.seats.W.name}`),
     el(
       "span",
-      `${stages[g.stage]} · 第 ${g.round} 輪 · 第 ${g.table} 桌`,
+      snapshot?.duel ? `${g.championship_clock ? "冠軍戰單局" : "備用對戰"} · 第 ${g.round} 局` : `${stages[g.stage]} · 第 ${g.round} 輪 · 第 ${g.table} 桌`,
       "badge",
     ),
   );
@@ -345,6 +351,7 @@ function renderMatch() {
   $("own-device-label").textContent = `本場參考自備設備（${g.stage === "final" ? 10 : 5} 分鐘；未使用為 ${g.stage === "final" ? 15 : 10} 分鐘）`;
   if (seatColor) $("own-device").checked = g.seats[seatColor].own_device;
   $("pass").disabled = !(
+    !moveBusy &&
     seatColor === g.turn &&
     g.status === "playing" &&
     snapshot.settings.allow_pass
@@ -393,6 +400,7 @@ async function pregameAction(action, body) {
 }
 function renderPregame() {
   const g = currentGame, panel = $("pregame-panel"), p = g?.pregame;
+  if (snapshot?.duel) duelMode.selectSeat(g);
   const pendingDice = diceStage.update(g, seatTeam);
   panel.classList.toggle("hidden", !p || g.status !== "ready");
   if (!p || g.status !== "ready") return;
@@ -418,7 +426,7 @@ function renderPregame() {
   }
   if (!seatTeam) panel.append(el("p", "輸入本隊固定點棋碼，即可擲骰及準備。"));
   if (seatTeam && !p.winner && !p.rolls?.[seatTeam]) {
-    const roll = button(rollingTeam ? "擲骰中…" : "擲兩顆骰子", () => pregameAction("dice", {}));
+    const roll = button(rollingTeam ? "擲骰中…" : snapshot?.duel ? `${g.seats[seatColor].name}：擲兩顆骰子` : "擲兩顆骰子", () => pregameAction("dice", {}));
     roll.id = "roll-dice";
     roll.disabled = !p.armed || pregameBusy || pendingDice;
     panel.append(roll);
@@ -440,7 +448,7 @@ function renderPregame() {
     if (p.color_choice) panel.append(el("p", `黑：${g.seats.B.name}；白：${g.seats.W.name}`));
     for (const color of ["B", "W"]) panel.append(el("p", `${g.seats[color].name}：${p.ready?.[g.seats[color].team] ? "已準備好 ✓" : "尚未準備"}`, "ready-team"));
     if (seatTeam) {
-      const ready = button(p.ready?.[seatTeam] ? "已準備好 ✓" : "準備好了", () => pregameAction("ready", { ready: true }));
+      const ready = button(p.ready?.[seatTeam] ? "已準備好 ✓" : snapshot?.duel ? `${g.seats[seatColor].name}：準備好了` : "準備好了", () => pregameAction("ready", { ready: true }));
       ready.id = "ready-game";
       ready.disabled = !p.color_choice || !!p.ready?.[seatTeam] || pregameBusy;
       panel.append(ready, el("small", "請先確認設備選項；雙方準備完成後開始計時。"));
@@ -470,6 +478,7 @@ function renderClocks() {
 }
 function updateSelection() {
   const allowed =
+    !moveBusy &&
     currentGame &&
     currentGame.status === "playing" &&
     currentGame.turn === seatColor;
@@ -584,6 +593,7 @@ function drawBoard() {
 $("board").onclick = (event) => {
   if (
     !currentGame ||
+    moveBusy ||
     currentGame.status !== "playing" ||
     seatColor !== currentGame.turn
   )
@@ -612,13 +622,21 @@ $("board").onclick = (event) => {
   drawBoard();
 };
 async function sendMove(move) {
-  await api(`/api/games/${selectedGame}/move`, {
-    method: "POST",
-    body: { move, version: currentGame.version },
-    token: seatToken,
-  });
-  selected = null;
-  await refreshGame();
+  if (moveBusy) return;
+  moveBusy = true;
+  renderMatch();
+  try {
+    await api(`/api/games/${selectedGame}/move`, {
+      method: "POST",
+      body: { move, version: currentGame.version },
+      token: seatToken,
+    });
+    selected = null;
+    await refreshGame();
+  } finally {
+    moveBusy = false;
+    renderMatch();
+  }
 }
 $("submit-move").onclick = () => safe(() => sendMove(selected));
 $("pass").onclick = () =>
@@ -1072,6 +1090,7 @@ async function poll() {
   polling = true;
   try {
     snapshot = await api("/api/state");
+    await duelMode.sync(snapshot);
     renderArena();
     if (selectedGame) await refreshGame();
     if (currentView === "records") await refreshRecords();

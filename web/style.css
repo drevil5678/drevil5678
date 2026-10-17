@@ -336,6 +336,9 @@ th {
   border-radius: 8px;
   align-self: start;
 }
+.duel-mode nav, .duel-mode #seat-form, .duel-mode #round-label,
+.duel-mode #empty, .duel-mode footer { display: none; }
+
 .bracket-prize {
   color: #84601e;
   font-weight: 700;

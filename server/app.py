@@ -89,9 +89,17 @@ class SpecialInput(BaseModel):
     team_b: str = Field(max_length=60)
 
 
-def create_app(runtime=None, engine=None, network=None, bootstrap=False):
+class DuelInput(SettingsInput):
+    team_a: str = Field(default="甲隊", min_length=1, max_length=60)
+    team_b: str = Field(default="乙隊", min_length=1, max_length=60)
+    championship: bool = False
+    device_a: bool = False
+    device_b: bool = False
+
+
+def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=False):
     store = Store(runtime or os.getenv("TOURNAMENT_DATA", str(ROOT / ".runtime")))
-    initial_roster_loaded = store.prepare_initial_roster() if bootstrap else False
+    initial_roster_loaded = store.prepare_initial_roster() if bootstrap and not duel else False
     state = store.state
     ai = engine or KataGo(store.runtime)
     lock = asyncio.Lock()
@@ -99,7 +107,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
     app = None
 
     def time_limit(game, own_device):
-        return (600. if own_device else 900.) if game.get("stage") == "final" else (300. if own_device else 600.)
+        return (600. if own_device else 900.) if game.get("stage") == "final" or game.get("championship_clock") else (300. if own_device else 600.)
 
     def init_pregame(game):
         if "pregame" not in game:
@@ -335,6 +343,12 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
 
     @app.middleware("http")
     async def origin_guard(request: Request, call_next):
+        if duel:
+            local_client = request.client and request.client.host in ("127.0.0.1", "::1", "testclient")
+            local_host = request.url.hostname in ("127.0.0.1", "localhost", "::1") or (
+                request.client and request.client.host == "testclient" and request.url.hostname == "testserver")
+            if not local_client or not local_host:
+                return Response("單機 PK 只允許本機連線", status_code=403)
         # Same-origin browser mutations; no CORS configuration and no cookie auth.
         if request.method in ("POST", "PUT", "DELETE"):
             origin = request.headers.get("origin")
@@ -345,14 +359,15 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
         response.headers["Referrer-Policy"] = "no-referrer"
         ancestors = "'self'" if request.url.path == "/local-practice" else "'none'"
         response.headers["Content-Security-Policy"] = f"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors {ancestors}"
-        if request.url.path.startswith("/api/"):
+        if duel or request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         return response
 
     @app.get("/api/health")
     async def health():
         return {"ok": True, "ai_ready": not ai.failure, "ai_error": ai.failure,
-                "rules_confirmed": state["settings"]["rules_confirmed"], "games": len(state["games"])}
+                "rules_confirmed": state["settings"]["rules_confirmed"], "games": len(state["games"]),
+                "mode": "duel" if duel else "tournament"}
 
     @app.get("/api/admin/network")
     async def network_status(request: Request, authorization: str | None = Header(None)):
@@ -369,11 +384,15 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
     async def public_state():
         async with lock:
             current = next((r for r in reversed(state["rounds"]) if r["stage"] in OFFICIAL_STAGES), None)
-            return {"settings": state["settings"], "rounds": state["rounds"],
+            result = {"settings": state["settings"], "rounds": state["rounds"],
                     "teams": [{"id": t["id"], "name": t["name"], "order": t["order"]} for t in state["teams"]],
                     "standings": [{k: t[k] for k in ("id", "name", "score", "buchholz", "rank", "order")} for t in standings(state)],
-                    "games": [public_game(g) for g in state["games"] if g["stage"] == "special" or (current and g["round_id"] == current["id"])],
+                    "games": [public_game(g) for g in state["games"] if duel or g["stage"] == "special" or (current and g["round_id"] == current["id"])],
                     "bracket": bracket(state), "awards": awards(state)}
+            if duel:
+                result["duel"] = {"credentials": {g["id"]: {s["team"]: s["token"] for s in g["seats"].values()}
+                                                   for g in state["games"]}}
+            return result
 
     @app.get("/api/bracket")
     async def get_bracket():
@@ -562,6 +581,58 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False):
         event("round", round_info)
         store.save()
         return round_info
+
+    if duel:
+        @app.post("/api/duel/new")
+        async def new_duel(body: DuelInput):
+            # Use the same game, dice, clock and AI implementation as the LAN
+            # event. The launcher supplies a completely separate data directory.
+            settings = body.model_dump(include=set(SettingsInput.model_fields))
+            if (body.board_size not in (9, 13, 19) or body.rules not in ("chinese", "japanese")
+                    or not math.isfinite(body.komi) or body.threshold != .40 or not body.allow_pass):
+                raise HTTPException(400, "請選擇有效棋盤、貼目與規則；備用版固定 40% 門檻並允許虛手")
+            names = [body.team_a.strip(), body.team_b.strip()]
+            if not all(names) or names[0] == names[1]:
+                raise HTTPException(400, "請填寫兩個不同的隊名")
+            if not body.rules_confirmed:
+                raise HTTPException(400, "請先確認本局規則")
+            async with lock:
+                if ai.failure:
+                    raise HTTPException(503, "AI 尚未就緒，請先檢查程式視窗")
+                if any(g["status"] != "finished" for g in state["games"]):
+                    raise HTTPException(409, "請先完成目前棋局；暫停的棋局可恢復或由主辦裁定")
+                if state["games"] and any(state["settings"][key] != value for key, value in settings.items()):
+                    raise HTTPException(409, "已有棋局紀錄，棋盤與計分規則已鎖定；請沿用目前規則")
+                state["settings"].update(settings)
+                teams = []
+                for name in names:
+                    team = {"id": uuid.uuid4().hex[:12], "name": name, "players": ["隊長", "隊員"],
+                            "mars_points": [0, 0], "checked_in": True, "eligibility_checked": True,
+                            "order": len(state["teams"]) + 1,
+                            "play_code": new_team_code(t["play_code"] for t in state["teams"])}
+                    state["teams"].append(team)
+                    teams.append(team["id"])
+                new_round("special", len(state["rounds"]) + 1, [teams])
+                game = state["games"][-1]
+                game["championship_clock"] = body.championship
+                for color, device in (("B", body.device_a), ("W", body.device_b)):
+                    game["seats"][color]["own_device"] = device
+                    game["remaining"][color] = time_limit(game, device)
+                init_pregame(game)["armed"] = True
+                game["version"] += 1
+                event("duel_create", {"game": game["id"], "teams": teams, "championship": body.championship})
+                store.save()
+                return public_game(game)
+
+        @app.post("/api/duel/games/{ident}/action")
+        async def duel_action(ident: str, body: Action):
+            return await referee(ident, body, "Bearer " + store.admin_token)
+
+        @app.get("/api/duel/export")
+        async def duel_export():
+            response = await export("Bearer " + store.admin_token)
+            response.headers["Content-Disposition"] = 'attachment; filename="duel-records.json"'
+            return response
 
     @app.post("/api/admin/special-tables")
     async def special_table(body: SpecialInput, authorization: str | None = Header(None)):

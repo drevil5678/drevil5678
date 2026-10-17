@@ -21,7 +21,7 @@ class DiceStage {
   }
 
   useScope(game, team) {
-    const scope = `${game.id}:${game.pregame.id}:${team}`;
+    const scope = `${game.id}:${game.pregame.id}:${this.shared ? "same-device" : team}`;
     if (this.scope !== scope) {
       this.clear();
       this.scope = scope;

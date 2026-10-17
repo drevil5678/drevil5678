@@ -1,4 +1,4 @@
-# NVIDIA GPU 與 12 桌測速（v0.6.0）
+# NVIDIA GPU 與 12 桌測速（v0.7.0）
 
 適用 Windows 10／11 x64 與 NVIDIA 獨立顯卡，包含 RTX 4050 Laptop。套件已附經官方 SHA-256 核對的 KataGo OpenCL 引擎，使用顯示卡驅動提供的 OpenCL；使用前請安裝正常運作的 NVIDIA 顯示卡驅動。此版本沒有在你的筆電上實測，不能先承諾每手延遲。
 

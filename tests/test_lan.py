@@ -92,7 +92,8 @@ def test_lan_mode_overrides_existing_loopback_config_without_rewriting(tmp_path,
     original = json.dumps({"host": "127.0.0.1", "port": port, "data_dir": "data", "open_browser": False})
     filename.write_text(original)
     captured = {}
-    def factory(directory, network, bootstrap):
+    def factory(directory, network, bootstrap, duel=False):
+        assert not duel
         captured["network"] = network
         captured["bootstrap"] = bootstrap
         return SimpleNamespace(state=SimpleNamespace(initial_roster_loaded=False))

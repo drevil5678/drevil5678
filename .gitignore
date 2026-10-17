@@ -8,4 +8,7 @@ build/
 dist/
 *.spec
 tournament.json
+duel.json
+duel-data/
+duel-only/
 data/

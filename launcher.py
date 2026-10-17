@@ -178,12 +178,13 @@ def browser_when_ready(port, stop, host="127.0.0.1", view="admin"):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="楊海分站賽 · 現場本地伺服器")
-    parser.add_argument("--config", type=Path, default=base_directory()/"tournament.json")
+    parser.add_argument("--config", type=Path)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--host", help="覆寫本次監聽位址，不修改設定檔")
     mode.add_argument("--lan", action="store_true", help="啟動區域網路網頁版，讓選手用瀏覽器加入")
     mode.add_argument("--practice", action="store_true", help="離線單機雙人練習，使用獨立資料與本機連線")
     mode.add_argument("--practice-lan", action="store_true", help="開啟主站同埠練習分頁，每個瀏覽器一桌，同機雙人或對電腦")
+    mode.add_argument("--duel", action="store_true", help="離線單機雙隊 PK，沿用正式規則並獨立保存棋局")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--empty-roster", action="store_true", help="新資料庫不預載名單，供獨立測試；不刪除現有隊伍")
@@ -198,15 +199,20 @@ def main(argv=None):
     practice_mode = args.practice
     listener, stop = None, threading.Event()
     try:
-        settings = load_settings(args.config)
-        host = "127.0.0.1" if args.practice else "0.0.0.0" if args.lan or args.practice_lan else args.host if args.host is not None else settings["host"]
-        port = args.port if args.port is not None else 8001 if practice_mode else settings["port"]
+        settings = load_settings(args.config or base_directory()/("duel.json" if args.duel else "tournament.json"))
+        local_mode = args.practice or args.duel
+        host = "127.0.0.1" if local_mode else "0.0.0.0" if args.lan or args.practice_lan else args.host if args.host is not None else settings["host"]
+        port = args.port if args.port is not None else 8002 if args.duel else 8001 if practice_mode else settings["port"]
         if not 1 <= port <= 65535:
             raise ValueError("port 必須是 1–65535")
         os.environ["TOURNAMENT_DATA"] = settings["data_dir"]
-        engine_environment(settings, args.engine)
+        engine_environment(settings, args.engine or ("cpu" if args.duel else None))
         os.environ["AUTO_BACKUP_SECONDS"] = str(settings["auto_backup_seconds"])
         directory = Path(settings["data_dir"])
+        if args.duel:
+            duel_directory = directory.parent/"duel-data"
+            directory = duel_directory if duel_directory != directory else directory.parent/"duel-only"
+            os.environ["TOURNAMENT_DATA"] = str(directory)
         if practice_mode:
             practice_directory = directory.parent/"practice-data"
             directory = practice_directory if practice_directory != directory else directory.parent/"practice-only"
@@ -254,23 +260,23 @@ def main(argv=None):
             backup = None if practice_mode else backup_before_start(directory)
             if backup:
                 print("已建立啟動前備份：", backup)
-            print("雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽與同機練習使用同一網址")
+            print("單機雙隊 PK · 正式規則 · 備用紀錄獨立保存" if args.duel else "雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽與同機練習使用同一網址")
             print("賽事資料目錄：", directory)
-            if not practice_mode:
+            if not local_mode:
                 print("主辦方管理金鑰檔案：", directory / "admin-token", "（請在本機安全讀取）")
-            print(f"本機練習連接埠：{port}，只允許此台電腦連線。" if args.practice else f"監聽位址：{host}，連接埠：{port}。其他電腦請輸入本主機的區域網路 IPv4 及此連接埠。")
+            print(f"單機連接埠：{port}，只允許此台電腦連線。" if local_mode else f"監聽位址：{host}，連接埠：{port}。其他電腦請輸入本主機的區域網路 IPv4 及此連接埠。")
             from server.lan import network_info
             binding = {"host": listener.getsockname()[0], "port": port}
             network = network_info(binding["host"], port)
-            print("雙人練習頁：" if practice_mode else "主辦管理頁：", network["admin_url"].replace("/#admin", "/") if practice_mode else network["admin_url"])
-            if not practice_mode:
+            print("單機 PK 頁：" if args.duel else "雙人練習頁：" if practice_mode else "主辦管理頁：", network["admin_url"].replace("/#admin", "/") if local_mode else network["admin_url"])
+            if not local_mode:
                 print("主站練習分頁：", network["admin_url"].replace("/#admin", "/#practice"), "（同機雙人或電腦，不可跨電腦入座）")
             for item in network["interfaces"]:
                 url = item["url"].split("/#", 1)[0] + "/" if practice_mode else item["url"]
                 print(f"{'練習' if practice_mode else '參賽'}網址（{item['name']}）：{url}")
-            if network["warning"] and not args.practice:
+            if network["warning"] and not local_mode:
                 print(network["warning"])
-            if not args.practice:
+            if not local_mode:
                 print("選手電腦只需瀏覽器。Windows 防火牆請允許活動使用的私人網路；無法連線時檢查是否在同一區網。")
             print("練習棋局請先下載 SGF 保存；停止請按 Ctrl+C。" if practice_mode else "不要關閉本視窗；停止請按 Ctrl+C，服務會保存並暫停棋局。")
             import uvicorn
@@ -279,12 +285,12 @@ def main(argv=None):
                 application = create_practice_app(directory)
             else:
                 from server.app import create_app
-                application = create_app(directory, network=binding, bootstrap=not args.empty_roster)
+                application = create_app(directory, network=binding, bootstrap=not args.empty_roster and not args.duel, duel=args.duel)
                 if application.state.initial_roster_loaded:
                     print("已建立內建 18 隊及預製固定點棋碼，全隊預設完成資格確認與檢錄。可直接列印 TEAM-CODES.html。")
             config = uvicorn.Config(application, host=host, port=port, workers=1, loop="asyncio", http="h11", ws="none", access_log=False)
             if not args.no_browser and settings["open_browser"]:
-                view = "practice" if practice_mode else "integrated-practice" if args.practice_lan else "admin"
+                view = "practice" if local_mode else "integrated-practice" if args.practice_lan else "admin"
                 threading.Thread(target=browser_when_ready, args=(port, stop, binding["host"], view), daemon=True).start()
             uvicorn.Server(config).run(sockets=[listener])
             return 0
@@ -310,4 +316,7 @@ if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
-    raise SystemExit(main())
+    arguments = sys.argv[1:]
+    if Path(sys.executable).stem.lower() == "yanghaiduel":
+        arguments = ["--duel", *arguments]
+    raise SystemExit(main(arguments))
