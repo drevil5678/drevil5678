@@ -339,15 +339,6 @@ th {
 .duel-mode nav, .duel-mode #seat-form, .duel-mode #round-label,
 .duel-mode #empty, .duel-mode footer { display: none; }
 
-.bracket-prize {
-  color: #84601e;
-  font-weight: 700;
-  background: #faf0d7;
-  border: 1px solid #e9d49c;
-  border-radius: 8px;
-  padding: 12px 18px;
-}
-.bracket-prize { margin: 0 0 18px; text-align: center; font-size: 15px; }
 .dice-stage {
   position: absolute;
   inset: 0;

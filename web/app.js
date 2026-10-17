@@ -25,6 +25,7 @@ let snapshot,
   currentView = "arena";
 let networkState;
 let moveBusy = false;
+let practiceControlBusy = false;
 let bracketState, rollingTeam = null, pregameBusy = false;
 const diceStage = new DiceStage(() => snapshot?.duel ? renderMatch() : renderPregame());
 const duelMode = new DuelMode();
@@ -213,7 +214,6 @@ async function refreshBracket() {
   for (const stage of data.stages) {
     const column = el("div", undefined, "bracket-column");
     column.append(el("h2", stage.label));
-    if (stage.stage === "final") column.append(el("p", "冠軍獎金 NT$20,000", "bracket-prize"));
     const matches = el("div", undefined, "bracket-matches");
     for (const match of stage.matches) {
       const card = el("article", undefined, "bracket-match" + (match.winner ? " complete" : ""));
@@ -729,6 +729,20 @@ async function refreshNetwork() {
   $("network-data").textContent = `賽事資料：${network.data_dir}；備份位置：${network.backup_dir}`;
   updateParticipantUrl();
 }
+$("practice-toggle").onclick = () => safe(async () => {
+  if (practiceControlBusy || !adminState) return;
+  practiceControlBusy = true;
+  $("practice-toggle").disabled = true;
+  try {
+    const result = await api("/api/admin/practice", {method: "POST", token: adminToken,
+      body: {enabled: !adminState.practice_enabled}});
+    await refreshAdmin();
+    notice(result.enabled ? "練習已開啟，隊伍可用點棋碼登入" : "練習已關閉，原棋局已保留");
+  } finally {
+    practiceControlBusy = false;
+    $("practice-toggle").disabled = false;
+  }
+});
 function updateParticipantUrl() {
   const url = $("network-address").value;
   $("participant-url").value = url;
@@ -834,6 +848,9 @@ function editTeam(t) {
   $("team-form").scrollIntoView({ behavior: "smooth" });
 }
 function renderAdmin() {
+  $("practice-control-status").textContent = adminState.practice_enabled ? "練習目前開啟 · 須驗證隊伍點棋碼" : "練習目前關閉";
+  $("practice-toggle").textContent = adminState.practice_enabled ? "關閉練習" : "開啟練習";
+  $("practice-toggle").disabled = practiceControlBusy;
   const s = adminState;
   $("team-count").textContent = `${s.teams.length}/32 隊 · 全部可排賽`;
   $("roster").replaceChildren(

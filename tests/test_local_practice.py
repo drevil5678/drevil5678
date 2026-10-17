@@ -10,6 +10,13 @@ from fastapi.testclient import TestClient
 from server.local_practice import IDLE_SECONDS, install_local_practice
 from tests.test_app import TestEngine
 
+PRACTICE_TEAMS = [{"id": "team-a", "name": "練習甲隊", "play_code": "ABCD-EFGH-JKLM"}]
+
+def login(client):
+    response = client.post("/api/local-practice/login", json={"code": PRACTICE_TEAMS[0]["play_code"]})
+    assert response.status_code == 200, response.text
+    return response
+
 
 @contextmanager
 def practice(engine=None, clock=time.time):
@@ -27,7 +34,7 @@ def practice(engine=None, clock=time.time):
             await ai.close()
 
     app = FastAPI(lifespan=lifespan)
-    manager = install_local_practice(app, ai, Path(__file__).resolve().parents[1], clock=clock)
+    manager = install_local_practice(app, ai, Path(__file__).resolve().parents[1], clock=clock, teams=lambda: PRACTICE_TEAMS, enabled=lambda: True)
     with TestClient(app, base_url="http://192.168.50.20:8000", client=("192.168.50.5", 1234)) as client:
         yield client, app
 
@@ -60,6 +67,7 @@ def other_browser(app, owner, ip="192.168.50.5"):
     client = TestClient(app, base_url=str(owner.base_url), client=(ip, 4567))
     client.portal = owner.portal
     try:
+        login(client)
         yield client
     finally:
         client.close()
@@ -67,9 +75,9 @@ def other_browser(app, owner, ip="192.168.50.5"):
 
 def test_bootstrap_private_cookie_ip_binding_and_no_remote_join():
     with practice() as (client, app):
-        assert client.post("/api/local-practice/rooms", json={}).status_code == 403
-        response = client.get("/api/local-practice/rooms")
-        assert response.status_code == 200
+        assert client.post("/api/local-practice/rooms", json={}).status_code == 401
+        assert client.get("/api/local-practice/rooms").status_code == 401
+        response = login(client)
         assert "httponly" in response.headers["set-cookie"].lower()
         assert "samesite=strict" in response.headers["set-cookie"].lower()
         assert client.post("/api/local-practice/rooms", json={}, headers={"Origin": "http://evil.example"}).status_code == 403
@@ -98,7 +106,7 @@ def test_bootstrap_private_cookie_ip_binding_and_no_remote_join():
 
 def test_same_browser_can_only_create_one_table_even_concurrently_or_after_finish():
     with practice() as (client, app):
-        client.get("/api/local-practice/rooms")
+        login(client)
         with ThreadPoolExecutor(max_workers=8) as executor:
             responses = list(executor.map(lambda _: client.post("/api/local-practice/rooms", json={"board_size": 9}), range(24)))
         assert [r.status_code for r in responses].count(200) == 1
@@ -124,7 +132,7 @@ def test_global_capacity_is_atomic_across_distinct_browsers_without_exposing_lim
     with practice() as (client, app), ExitStack() as contexts:
         browsers = [client] + [contexts.enter_context(other_browser(app, client)) for _ in range(19)]
         for browser in browsers:
-            browser.get("/api/local-practice/rooms")
+            login(browser)
         with ThreadPoolExecutor(max_workers=8) as executor:
             responses = list(executor.map(lambda browser: browser.post("/api/local-practice/rooms", json={"board_size": 9}), browsers))
         assert [r.status_code for r in responses].count(200) == 15
@@ -141,7 +149,7 @@ def test_global_capacity_is_atomic_across_distinct_browsers_without_exposing_lim
 
 def test_same_computer_alternation_forbidden_stale_undo_and_sgf():
     with practice() as (client, _):
-        client.get("/api/local-practice/rooms")
+        login(client)
         room = create(client)
         game = ready(client, room)
         assert game["mode"] == "local" and game["turn"] == "B"
@@ -168,7 +176,7 @@ def test_same_computer_alternation_forbidden_stale_undo_and_sgf():
 
 def test_computer_black_or_white_and_undo_returns_same_human_turn():
     with practice() as (client, _):
-        client.get("/api/local-practice/rooms")
+        login(client)
         for color in ("B", "W"):
             room = create(client, mode="ai", human_color=color)
             game = ready(client, room, moves=0 if color == "B" else 1)
@@ -196,7 +204,7 @@ def test_ai_failure_retry_preserves_accepted_move_and_double_pass_scores_board()
 
     engine = FailingEngine()
     with practice(engine) as (client, _):
-        client.get("/api/local-practice/rooms")
+        login(client)
         room = create(client, forbid_best=False)
         game = ready(client, room)
         engine.fail = True
@@ -221,7 +229,7 @@ def test_expiry_and_closing_during_analysis_cannot_resurrect_room():
 
     now = [1000.0]
     with practice(SlowEngine(), clock=lambda: now[0]) as (client, _):
-        client.get("/api/local-practice/rooms")
+        login(client)
         closed = create(client)
         current = client.get(endpoint(closed)).json()["game"]
         assert current["status"] == "analyzing"

@@ -125,19 +125,24 @@ def main(executable=None, port=None):
                     network = client.get("/api/admin/network", headers=admin).json()
                     assert network["port"] == port and network["bind_host"] == "0.0.0.0"
                     assert network["interfaces"], "no local LAN interface for source-IP isolation check"
+                    assert client.get(BASE).status_code == 401
+                    assert client.post("/api/admin/practice", headers=admin, json={"enabled": True}).status_code == 200
                     for n in range(2):
                         response = client.post("/api/admin/teams", headers=admin, json={
                             "name": f"隔離驗證隊{n+1}", "players": [f"隊長{n+1}", f"隊員{n+1}"]})
                         assert response.status_code == 200
+                    practice_code = response.json()["play_code"]
                     assert client.post("/api/admin/settings", headers=admin, json={"board_size": 9, "rules_confirmed": True}).status_code == 200
                     assert client.post("/api/admin/rounds/swiss", headers=admin).status_code == 200
                     formal_before = client.get("/api/admin/state", headers=admin).json()
                     public_before = client.get("/api/state").json()
                     assert len(formal_before["games"]) == 1 and formal_before["games"][0]["status"] == "ready"
-                    assert client.post(BASE, json={}).status_code == 403, "room creation accepted without browser cookie"
+                    assert client.post(BASE, json={}).status_code == 401, "room creation accepted without team authentication"
+                    login = client.post("/api/local-practice/login", json={"code": practice_code})
+                    assert login.status_code == 200
                     initial = client.get(BASE)
                     assert initial.json()["tables"] == 0
-                    cookie_header = initial.headers["set-cookie"].lower()
+                    cookie_header = login.headers["set-cookie"].lower()
                     assert "httponly" in cookie_header and "samesite=strict" in cookie_header
                     assert client.post(BASE, json={"mode": "pvp"}).status_code == 400
                     assert client.post(BASE, json={}, headers={"Origin": "http://another.example"}).status_code == 403
@@ -203,6 +208,7 @@ def main(executable=None, port=None):
                     assert ready(computer, 1)["turn"] == "W"
 
                     # A different browser sees the global count but no other player's tables.
+                    assert foreign.post("/api/local-practice/login", json={"code": practice_code}).status_code == 200
                     assert foreign.get(BASE).json()["rooms"] == []
                     assert foreign.get(endpoint(computer)).status_code == 404
                     assert foreign.get(endpoint(computer, "sgf")).status_code == 404
@@ -227,6 +233,7 @@ def main(executable=None, port=None):
                     # Capacity remains protected across distinct browsers, without a public numeric message.
                     browsers = [contexts.enter_context(httpx.Client(base_url=url, trust_env=False, timeout=10)) for _ in range(20)]
                     for browser in browsers:
+                        assert browser.post("/api/local-practice/login", json={"code": practice_code}).status_code == 200
                         browser.get(BASE)
                     with ThreadPoolExecutor(max_workers=8) as executor:
                         attempts = list(executor.map(lambda browser: browser.post(BASE, json={"board_size": 9}), browsers))
@@ -240,6 +247,7 @@ def main(executable=None, port=None):
 
                     def isolated_browser(_):
                         with httpx.Client(base_url=url, trust_env=False, timeout=10) as browser:
+                            assert browser.post("/api/local-practice/login", json={"code": practice_code}).status_code == 200
                             response = browser.get(BASE)
                             assert response.status_code == 200
                             assert response.json()["tables"] == 15 and response.json()["rooms"] == []
@@ -265,6 +273,7 @@ def main(executable=None, port=None):
                 report = {
                     "passed": True, "real_ai": True, "same_port": port, "second_port_8001": False,
                     "shared_formal_and_practice_routes": True, "max_tables": 15,
+                    "team_code_authentication": True, "anonymous_access_denied": True, "practice_opened_by_admin": True,
                     "concurrent_global_capacity_verified": True, "slot_release_verified": True,
                     "one_table_per_browser_atomic": True,
                     "same_computer_two_human": True, "automatic_computer_moves_and_undo": True,

@@ -89,6 +89,10 @@ class SpecialInput(BaseModel):
     team_b: str = Field(max_length=60)
 
 
+class PracticeControl(BaseModel):
+    enabled: bool
+
+
 class DuelInput(SettingsInput):
     team_a: str = Field(default="甲隊", min_length=1, max_length=60)
     team_b: str = Field(default="乙隊", min_length=1, max_length=60)
@@ -339,7 +343,19 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
     app = FastAPI(title="楊海分站賽", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.ai = store, ai
     app.state.initial_roster_loaded = initial_roster_loaded
-    practice = install_local_practice(app, ai, ROOT)
+    practice = install_local_practice(app, ai, ROOT, teams=lambda: state["teams"],
+                                      enabled=lambda: state["practice_enabled"])
+
+    @app.post("/api/admin/practice")
+    async def practice_control(body: PracticeControl, authorization: str | None = Header(None)):
+        require_admin(authorization)
+        async with lock:
+            async with practice.registry:
+                state["practice_enabled"] = body.enabled
+                practice.set_open(body.enabled)
+                event("practice_control", {"enabled": body.enabled})
+                store.save()
+                return {"enabled": body.enabled}
 
     @app.middleware("http")
     async def origin_guard(request: Request, call_next):
@@ -384,7 +400,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
     async def public_state():
         async with lock:
             current = next((r for r in reversed(state["rounds"]) if r["stage"] in OFFICIAL_STAGES), None)
-            result = {"settings": state["settings"], "rounds": state["rounds"],
+            result = {"settings": state["settings"], "practice_enabled": state["practice_enabled"], "rounds": state["rounds"],
                     "teams": [{"id": t["id"], "name": t["name"], "order": t["order"]} for t in state["teams"]],
                     "standings": [{k: t[k] for k in ("id", "name", "score", "buchholz", "rank", "order")} for t in standings(state)],
                     "games": [public_game(g) for g in state["games"] if duel or g["stage"] == "special" or (current and g["round_id"] == current["id"])],

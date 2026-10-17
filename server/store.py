@@ -32,6 +32,7 @@ class Store:
         self.state = json.loads(row[0]) if row else {
             "settings": DEFAULT_SETTINGS.copy(), "teams": [], "games": [], "rounds": [], "events": []}
         self.pending_events = []
+        self.state.setdefault("practice_enabled", False)
         self._migrate_event_defaults()
         # Preserve old per-game tokens, while adding a stable code to each team.
         used = [t["play_code"] for t in self.state["teams"] if t.get("play_code")]

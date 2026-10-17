@@ -55,7 +55,7 @@
       <section id="practice" class="view hidden">
         <p class="eyebrow">LOCAL PRACTICE</p>
         <h1>自由練習</h1>
-        <p>在這台電腦與朋友輪流落子，或與電腦對弈。不開放其他電腦加入這一局，練習不計正式成績。</p>
+        <p>主辦開放後，輸入隊伍點棋碼登入，可在這台電腦與朋友輪流落子，或與電腦對弈。練習不計正式成績。</p>
         <iframe id="practice-frame" title="同機雙人或電腦對弈" data-src="/local-practice" loading="lazy"></iframe>
       </section>
       <section id="standings" class="view hidden">
@@ -86,6 +86,12 @@
           ><button id="logout" type="button" class="secondary">登出</button>
         </form>
         <div id="admin-content" class="hidden">
+          <article class="panel">
+            <h2>練習開放控制</h2>
+            <p id="practice-control-status" role="status">練習目前關閉</p>
+            <button id="practice-toggle" type="button">開啟練習</button>
+            <p>選手須用隊伍點棋碼登入。關閉後停止落子與電腦回應，保留棋盤供下載棋譜或收桌；重新開放可繼續。開關設定會保留至下次啟動。</p>
+          </article>
           <article id="network-panel" class="panel">
             <div class="heading">
               <div><h2>區域網路開賽</h2><p>只在主辦主機執行程式。選手連到相同區網，用瀏覽器輸入以下網址即可。</p></div>
@@ -253,7 +259,7 @@
           </article>
           <article class="panel">
             <h2>自由練習</h2>
-            <p>點上方「練習」，可在同一台電腦由兩人輪流落子，或選擇與電腦對戰。不支援跨電腦連線到同一棋局，不需要正式賽點棋碼。</p>
+            <p>主辦開放後，點上方「練習」並輸入隊伍點棋碼登入，可在同一台電腦由兩人輪流落子，或選擇與電腦對戰。不支援跨電腦連線到同一棋局。</p>
             <p>每個瀏覽器只開一桌練習，重新整理或開新分頁會回到原桌。練習無計時、不計正式成績，勝率已計入本局貼目。結束後先下載 SGF 再收桌；30 分鐘無操作會自動收桌。</p>
           </article>
         </div>

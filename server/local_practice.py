@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from .go import IllegalMove, candidates, decode, encode, play, sgf
+from .credentials import matches_team_code
 from .practice import PracticeSettings
 from .scoring import score_position
 
@@ -35,10 +36,16 @@ class LocalMove(LocalVersion):
     move: str = Field(max_length=5)
 
 
+class PracticeLogin(BaseModel):
+    code: str = Field(min_length=1, max_length=80)
+
+
 class LocalPracticeManager:
-    def __init__(self, ai, clock=time.time):
+    def __init__(self, ai, clock=time.time, teams=lambda: (), enabled=lambda: False):
         self.ai = ai
         self.clock = clock
+        self.teams = teams
+        self.enabled = enabled
         self.rooms = {}
         self.sessions = {}
         self.tasks = {}
@@ -70,7 +77,7 @@ class LocalPracticeManager:
     def purge(self):
         now = self.clock()
         for ident, room in list(self.rooms.items()):
-            if now - room["last_activity"] >= IDLE_SECONDS:
+            if room["status"] != "paused" and now - room["last_activity"] >= IDLE_SECONDS:
                 self.discard(ident)
         active = {r["owner"] for r in self.rooms.values()}
         for token, session in list(self.sessions.items()):
@@ -97,21 +104,49 @@ class LocalPracticeManager:
     def owner(self, request, required=True):
         token = request.cookies.get(COOKIE_NAME, "")
         session = self.sessions.get(token)
-        if session and session["host"] == self.peer(request):
+        team = next((team for team in self.teams() if session and team["id"] == session["team"]
+                     and matches_team_code(team["play_code"], session["credential"])), None)
+        if session and team and session["host"] == self.peer(request):
             session["seen"] = self.clock()
             return token
         if required:
-            raise HTTPException(403, "請從練習頁面開桌，並使用同一台電腦與瀏覽器操作")
+            raise HTTPException(401, "請先輸入有效的隊伍點棋碼登入練習")
         return None
 
-    def bootstrap(self, request, response):
+    def require_enabled(self):
+        if not self.enabled():
+            raise HTTPException(403, "主辦目前關閉練習，請等待開放；原棋局仍可下載棋譜或收桌")
+
+    def login(self, request, response, team):
         token = self.owner(request, required=False)
+        if token and self.sessions[token]["team"] != team["id"]:
+            if any(room["owner"] == token for room in self.rooms.values()):
+                raise HTTPException(409, "請先收桌並登出，再切換隊伍")
+            self.sessions.pop(token, None)
+            token = None
         if not token:
             token = secrets.token_urlsafe(32)
-            self.sessions[token] = {"host": self.peer(request), "seen": self.clock()}
+            self.sessions[token] = {"host": self.peer(request), "seen": self.clock(),
+                                    "team": team["id"], "credential": team["play_code"]}
             response.set_cookie(COOKIE_NAME, token, httponly=True, samesite="strict", secure=request.url.scheme == "https",
                                 path=COOKIE_PATH, max_age=24 * 60 * 60)
         return token
+
+    def set_open(self, enabled):
+        for room in self.rooms.values():
+            if not enabled and room["status"] in ("playing", "analyzing"):
+                room["resume_status"] = room["status"]
+                room["status"] = "paused"
+                room["version"] += 1
+                task = self.tasks.pop(room["id"], None)
+                if task:
+                    task.cancel()
+            elif enabled and room["status"] == "paused":
+                self.touch(room)
+                if room.pop("resume_status", None) == "playing" and room["candidates"]:
+                    room.update(status="playing", version=room["version"] + 1)
+                else:
+                    self.schedule(room)
 
     def room(self, ident, request):
         # Do not disclose table existence to another browser or network peer.
@@ -126,7 +161,9 @@ class LocalPracticeManager:
         if self.rooms.get(room["id"]) is not room:
             raise HTTPException(404, "這桌已收桌或逾時，請重新開桌")
 
-    def version(self, room, body):
+    def version(self, room, body, active=True):
+        if active:
+            self.require_enabled()
         self.live(room)
         if body.version != room["version"]:
             raise HTTPException(409, "棋局已更新，請確認最新棋盤後重試")
@@ -234,9 +271,9 @@ class LocalPracticeManager:
         task.add_done_callback(done)
 
 
-def install_local_practice(app: FastAPI, ai, root, clock=time.time):
+def install_local_practice(app: FastAPI, ai, root, clock=time.time, teams=lambda: (), enabled=lambda: False):
     """Install routes; the caller awaits manager.start/close in its own lifespan."""
-    manager = LocalPracticeManager(ai, clock)
+    manager = LocalPracticeManager(ai, clock, teams, enabled)
     root = Path(root)
     base = "/api/local-practice/rooms"
 
@@ -244,23 +281,56 @@ def install_local_practice(app: FastAPI, ai, root, clock=time.time):
     async def practice_page():
         return FileResponse(root / "web/local-practice.html", headers={"Cache-Control": "no-store"})
 
+    @app.get("/api/local-practice/access")
+    async def access(request: Request):
+        manager.guard(request)
+        token = manager.owner(request, required=False)
+        team = next((t for t in manager.teams() if token and t["id"] == manager.sessions[token]["team"]), None)
+        return {"enabled": bool(manager.enabled()), "authenticated": bool(token),
+                "team": {"id": team["id"], "name": team["name"]} if team else None}
+
+    @app.post("/api/local-practice/login")
+    async def login(request: Request, response: Response, body: PracticeLogin):
+        manager.guard(request)
+        async with manager.registry:
+            manager.require_enabled()
+            manager.purge()
+            team = next((t for t in manager.teams() if matches_team_code(t["play_code"], body.code)), None)
+            if team is None:
+                raise HTTPException(401, "隊伍點棋碼不正確")
+            manager.login(request, response, team)
+            return {"team": {"id": team["id"], "name": team["name"]}}
+
+    @app.post("/api/local-practice/logout")
+    async def logout(request: Request, response: Response):
+        manager.guard(request)
+        async with manager.registry:
+            manager.purge()
+            token = manager.owner(request, required=False)
+            if any(room["owner"] == token for room in manager.rooms.values()):
+                raise HTTPException(409, "請先下載需要的棋譜並收桌，再登出練習")
+            manager.sessions.pop(token, None)
+            response.delete_cookie(COOKIE_NAME, path=COOKIE_PATH)
+            return {"logged_out": True}
+
     @app.get(base)
     async def listing(request: Request, response: Response):
         manager.guard(request)
         async with manager.registry:
             manager.purge()
-            token = manager.bootstrap(request, response)
+            token = manager.owner(request)
             rooms = [{"id": r["id"], "name": r["name"], "mode": r["mode"], "status": r["status"],
                       "board_size": r["settings"]["board_size"], "moves": len(r["moves"])}
                      for r in manager.rooms.values() if r["owner"] == token and r["host"] == manager.peer(request)]
             response.headers["Cache-Control"] = "no-store"
-            return {"rooms": rooms, "tables": len(manager.rooms), "max_tables": MAX_TABLES,
+            return {"rooms": rooms, "enabled": bool(manager.enabled()), "tables": len(manager.rooms), "max_tables": MAX_TABLES,
                     "idle_minutes": IDLE_SECONDS // 60}
 
     @app.post(base)
     async def create(request: Request, body: LocalRoomInput):
         manager.guard(request)
         token = manager.owner(request)
+        manager.require_enabled()
         if body.mode not in ("local", "ai") or body.human_color not in ("B", "W"):
             raise HTTPException(400, "只支援同機雙人或人對電腦，請選擇棋色")
         if body.board_size not in (9, 13, 19) or body.rules not in ("chinese", "japanese") or not math.isfinite(body.komi):
@@ -270,6 +340,7 @@ def install_local_practice(app: FastAPI, ai, root, clock=time.time):
         if getattr(ai, "failure", ""):
             raise HTTPException(503, "練習 AI 尚未就緒，請稍後再試")
         async with manager.registry:
+            manager.require_enabled()
             manager.purge()
             if any(room["owner"] == token for room in manager.rooms.values()):
                 raise HTTPException(409, "這個瀏覽器已有一桌練習，請繼續原桌，或先收桌再開新局")
@@ -368,7 +439,7 @@ def install_local_practice(app: FastAPI, ai, root, clock=time.time):
         manager.guard(request)
         room = manager.room(ident, request)
         async with room["lock"]:
-            manager.version(room, body)
+            manager.version(room, body, active=False)
             async with manager.registry:
                 manager.discard(ident)
             return {"closed": True}

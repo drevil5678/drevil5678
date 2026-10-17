@@ -6,6 +6,16 @@
 <main>
 <div id="practice-notice" role="status" aria-live="polite"></div>
 <section class="panel">
+<h1>隊伍練習入口</h1>
+<p id="practice-access-status" role="status">正在確認練習開放狀態…</p>
+<form id="practice-login" class="inline">
+<label>隊伍點棋碼<input id="practice-code" type="password" maxlength="80" autocomplete="off" required placeholder="輸入主辦制發的固定點棋碼"></label>
+<button type="submit" disabled>登入練習</button>
+</form>
+<div id="practice-identity" class="hidden"><span id="practice-team"></span> <button id="practice-logout" type="button" class="secondary">登出練習</button><p>收桌後可登出或切換隊伍。</p></div>
+</section>
+<div id="practice-workspace" class="hidden">
+<section class="panel">
 <h1>單機自由練習</h1>
 <p>兩人共用這台電腦輪流下棋，或獨自挑戰電腦。本桌只供開桌時的電腦與瀏覽器使用，不提供跨電腦入座。不計時、不影響正式賽成績。</p>
 <p id="practice-capacity">正在載入練習桌…</p>
@@ -30,4 +40,4 @@
 <p id="practice-result" role="status"></p><div id="practice-hints"></div><a id="practice-sgf" class="hidden" href="#">下載本局 SGF</a></article>
 <article class="panel"><h2>練習方式</h2><ol><li>點棋盤選位置，再按「確認落子」。</li><li>同機雙人由兩位玩家輪流操作；人對電腦時，電腦會自動下另一色。</li><li>紅叉是禁用首選，綠色數字是可參考的建議；也能選其他合法落點。</li><li>勝率已計入本局貼目，以輪到行棋方為觀點。</li><li>雙方連續虛手後，直接依棋盤現況與貼目計分，不另移除死子。</li><li>對電腦悔棋會退回你上次落子前；同機雙人每次退一手。</li></ol></article>
 </aside></div>
-</main></body></html>
+</div></main></body></html>
