@@ -8,7 +8,7 @@ class KnockoutMode {
     if (!this.enabled) {
       this.enabled = true;
       document.body.classList.add("knockout-mode");
-      $("bracket-description").textContent = "依輸入順序相鄰配對；八強一局定勝負，四強與冠軍戰三戰兩勝。勝隊自動帶入下一階段。";
+      $("bracket-description").textContent = "依輸入順序相鄰配對；八強、四強一局定勝負，只有冠軍戰三戰兩勝。勝隊自動帶入下一階段。";
       const setup = el("article", undefined, "panel"); setup.id = "knockout-setup";
       setup.innerHTML = `<h2>輸入八強隊名</h2><p>第 1 隊對第 2 隊、第 3 隊對第 4 隊，依此類推。建立後隊名與規則鎖定，請先核對配對順序。</p>
         <form id="knockout-form" class="form-grid">

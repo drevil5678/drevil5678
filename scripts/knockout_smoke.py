@@ -140,15 +140,12 @@ def main(executable=None, port=None):
                             assert "KM[7.5]" in client.get(f"/api/games/{gid}/sgf").text
                             for index in (2, 3, 4):
                                 host_win(f"quarter-{index}")
-                            a, b = [team["id"] for team in match("semi-1")["teams"]]
-                            host_win("semi-1", a)
-                            assert match("semi-1")["winner"] is None
-                            host_win("semi-1", b)
-                            assert match("semi-1")["winner"] is None
-                            host_win("semi-1", a)
+                            _, a = host_win("semi-1")
                             assert match("semi-1")["winner"]["id"] == a
+                            assert match("semi-1")["best_of"] == 1
+                            assert client.post("/api/knockout/matches/semi-1/next", json={}).status_code == 409
                             _, c = host_win("semi-2")
-                            host_win("semi-2", c)
+                            assert match("semi-2")["winner"]["id"] == c
                             assert client.post("/api/knockout/matches/semi-2/next", json={}).status_code == 409
                             final, _ = host_win("final-1", c, device_a=True)
                             assert final["remaining"] == {"B": 600, "W": 900}
@@ -157,7 +154,7 @@ def main(executable=None, port=None):
                             assert client.get("/api/bracket").json()["champion"]["id"] == c
                             assert client.post("/api/knockout/matches/final-1/next", json={}).status_code == 409
                             exported = client.get("/api/duel/export").json()
-                            assert len(exported["games"]) == 11 and exported["awards"] == []
+                            assert len(exported["games"]) == 8 and exported["awards"] == []
                             assert all("token" not in seat for game in exported["games"] for seat in game["seats"].values())
                         assert all(marker.read_bytes() == original for marker, original in originals.items())
                         assert config.read_text(encoding="utf-8") == original_config
@@ -168,8 +165,8 @@ def main(executable=None, port=None):
                     stop(process)
         report = {"passed": True, "packaged_app": bool(executable), "platform": sys.platform,
                   "real_ai_games": 1, "other_games": "organizer adjudication to verify advancement",
-                  "manual_eight_names": True, "quarter_bo1": True, "semifinal_and_final_bo3": True,
-                  "two_zero_and_two_one": True, "restart_preserves_board_names_and_series": True,
+                  "manual_eight_names": True, "quarter_and_semifinal_bo1": True, "final_bo3": True,
+                  "final_two_zero": True, "restart_preserves_board_and_names": True,
                   "champion_recorded": True, "sgf_and_json": True, "formal_and_duel_data_untouched": True}
         (ROOT / ".runtime").mkdir(exist_ok=True)
         (ROOT / ".runtime/knockout-smoke-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

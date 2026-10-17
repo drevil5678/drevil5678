@@ -54,10 +54,8 @@ async function until(action,message){for(let i=0;i<300;i++){if(await action())re
   await until(async()=>!!(await game()).result,"Referee result not saved");return winner;
  }
  for(const index of [2,3,4])await hostWin(`quarter-${index}`);
- const first=await hostWin("semi-1");assert(!(await match("semi-1")).winner,"One win incorrectly ends semifinal");
- await hostWin("semi-1",first);assert((await match("semi-1")).wins[first]===2,"Semifinal 2-0 incorrect");
- const secondMatch=await match("semi-2"),a=secondMatch.teams[0].id,b=secondMatch.teams[1].id;
- await hostWin("semi-2",a);await hostWin("semi-2",b);assert(!(await match("semi-2")).winner,"1-1 incorrectly advances");await hostWin("semi-2",b);
+ const first=await hostWin("semi-1");assert((await match("semi-1")).winner.id===first,"One semifinal win did not advance");
+ const second=await hostWin("semi-2");assert((await match("semi-2")).winner.id===second,"Second semifinal win did not advance");
  const final=await match("final-1"),champion=final.teams[1].id;
  await hostWin("final-1",final.teams[0].id);await hostWin("final-1",champion);assert(!(await state()).bracket.champion,"Champion declared at 1-1");await hostWin("final-1",champion);
  await page.locator('nav [data-view="bracket"]').click();await page.locator("#bracket-champion").filter({hasText:final.teams[1].name}).waitFor();
@@ -65,6 +63,6 @@ async function until(action,message){for(let i=0;i<300;i++){if(await action())re
  await page.screenshot({path:path.join(root,".runtime/knockout-bracket.png"),fullPage:true});await page.reload();await page.locator("#bracket-champion").filter({hasText:final.teams[1].name}).waitFor();
  await arena();assert(await page.locator('[data-next-match="final-1"]').isDisabled(),"Fourth final game allowed");assert(!await page.locator("#knockout-setup").isVisible(),"Saved names can be overwritten");
  assert(!errors.length,"Browser errors: "+errors.join(","));
- const report={passed:true,manual_eight_names:true,real_ai_first_quarter:true,other_games:"organizer adjudication",semifinal_two_zero_and_two_one:true,final_two_one:true,bracket_and_champion:true,reload_preserves_series:true,browser_errors:errors.length};
+ const report={passed:true,manual_eight_names:true,real_ai_first_quarter:true,other_games:"organizer adjudication",semifinal_single_game:true,final_two_one:true,bracket_and_champion:true,reload_preserves_series:true,browser_errors:errors.length};
  fs.writeFileSync(path.join(root,".runtime/knockout-browser-report.json"),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 })().catch(async error=>{console.error(error.stack);if(page)console.error(await page.locator("#notice").innerText());console.error(log.slice(-2000));process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();server.kill("SIGTERM");await new Promise(resolve=>server.exitCode!==null?resolve():server.once("exit",resolve));fs.rmSync(temp,{recursive:true,force:true});});

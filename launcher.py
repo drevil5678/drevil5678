@@ -185,7 +185,7 @@ def main(argv=None):
     mode.add_argument("--practice", action="store_true", help="離線單機雙人練習，使用獨立資料與本機連線")
     mode.add_argument("--practice-lan", action="store_true", help="開啟主站同埠練習分頁，每個瀏覽器一桌，同機雙人或對電腦")
     mode.add_argument("--duel", action="store_true", help="離線單機雙隊 PK，沿用正式規則並獨立保存棋局")
-    mode.add_argument("--knockout", action="store_true", help="單機八強淘汰賽，自填八隊，四強及冠軍三戰兩勝")
+    mode.add_argument("--knockout", action="store_true", help="單機八強淘汰賽，自填八隊，僅冠軍戰三戰兩勝")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--empty-roster", action="store_true", help="新資料庫不預載名單，供獨立測試；不刪除現有隊伍")
@@ -265,7 +265,7 @@ def main(argv=None):
             backup = None if practice_mode else backup_before_start(directory)
             if backup:
                 print("已建立啟動前備份：", backup)
-            print("單機八強淘汰賽 · 四強及冠軍三戰兩勝 · 獨立保存" if args.knockout else "單機雙隊 PK · 正式規則 · 備用紀錄獨立保存" if args.duel else "雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽與同機練習使用同一網址")
+            print("單機八強淘汰賽 · 僅冠軍戰三戰兩勝 · 獨立保存" if args.knockout else "單機雙隊 PK · 正式規則 · 備用紀錄獨立保存" if args.duel else "雙人離線單機練習 · 不計正式賽積分" if practice_mode else "楊海分站賽本地伺服器 · 比賽與同機練習使用同一網址")
             print("賽事資料目錄：", directory)
             if not local_mode:
                 print("主辦方管理金鑰檔案：", directory / "admin-token", "（請在本機安全讀取）")

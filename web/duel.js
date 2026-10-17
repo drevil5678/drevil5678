@@ -15,7 +15,7 @@ class DuelMode {
       diceStage.shared = true;
       document.querySelector(".brand").replaceChildren(el("span", state.knockout ? "八強淘汰賽 · 單機版" : "單機雙隊 PK"));
       const heading = document.querySelector("#arena .heading");
-      heading.querySelector("div").replaceChildren(el("h1", state.knockout ? "八支隊伍，爭取最後一勝。" : "兩支隊伍，一台電腦。"), el("p", state.knockout ? "八強一局定勝負，四強與冠軍戰三戰兩勝。兩隊在這台電腦輪流操作，每局重新擲骰猜先。" : "不需網路，由雙方輪流操作。使用正式判勝規則，紀錄獨立保存；比賽結果請交主辦登錄。"));
+      heading.querySelector("div").replaceChildren(el("h1", state.knockout ? "八支隊伍，爭取最後一勝。" : "兩支隊伍，一台電腦。"), el("p", state.knockout ? "八強、四強一局定勝負，只有冠軍戰三戰兩勝。兩隊在這台電腦輪流操作，每局重新擲骰猜先。" : "不需網路，由雙方輪流操作。使用正式判勝規則，紀錄獨立保存；比賽結果請交主辦登錄。"));
       if (!state.knockout) {
       const panel = el("article", undefined, "panel");
       panel.id = "duel-setup";

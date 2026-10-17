@@ -1,4 +1,4 @@
-"""Independent eight-team bracket: quarterfinal BO1, semifinal/final BO3."""
+"""Independent eight-team bracket: quarterfinal/semifinal BO1, final BO3."""
 
 
 def bracket(state):
@@ -9,7 +9,9 @@ def bracket(state):
         ident = f"{stage}-{number}"
         games = sorted((g for g in state["games"] if g.get("knockout_match") == ident), key=lambda g: g["round"])
         wins = {tid: 0 for tid in tids if tid}
-        required = 1 if stage == "quarter" else 2
+        # Preserve the format of already-started v0.8.0 semifinals on upgrade.
+        legacy_semi = stage == "semi" and any(game.get("knockout_best_of") == 3 for game in games)
+        required = 2 if stage == "final" or legacy_semi else 1
         for game in games:
             if game.get("result"):
                 winner = game["result"]["winner"]
@@ -31,7 +33,8 @@ def bracket(state):
                                       for match in quarters[index*2:index*2+2]]) for index in range(2)]
     final = slot("final", 1, [match["winner"]["id"] if match["winner"] else None for match in semis])
     return {"stages": [{"stage": "quarter", "label": "八強（一局定勝負）", "matches": quarters},
-                       {"stage": "semi", "label": "四強（三戰兩勝）", "matches": semis},
+                       {"stage": "semi", "label": "四強（已開賽對戰沿用原賽制）" if any(match["best_of"] == 3 for match in semis)
+                        else "四強（一局定勝負）", "matches": semis},
                        {"stage": "final", "label": "冠軍戰（三戰兩勝）", "matches": [final]}],
             "champion": final["winner"], "knockout": True, "initialized": len(entrants) == 8,
             "swiss_rounds": 0, "swiss_complete": False}

@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
+import pytest
 
 from server.app import create_app
 from tests.test_app import TestEngine
@@ -46,7 +47,8 @@ def test_manual_names_pair_order_and_bad_setup_cannot_overwrite(tmp_path):
         assert len(app.state.store.state["teams"]) == 8
 
 
-def test_semi_and_final_bo3_handle_2_0_2_1_and_single_point25_win(tmp_path):
+@pytest.mark.parametrize("split_final", [False, True], ids=["final-2-0", "final-2-1"])
+def test_quarter_and_semi_bo1_final_bo3_and_single_point25_win(tmp_path, split_final):
     app = create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True)
     with TestClient(app) as client:
         assert initialize(client).status_code == 200
@@ -57,22 +59,22 @@ def test_semi_and_final_bo3_handle_2_0_2_1_and_single_point25_win(tmp_path):
         assert client.post("/api/knockout/matches/quarter-1/next", json={}).status_code == 409
         _, first = win(client, "semi-1", points=1.25)
         semi = find(client, "semi-1")
-        assert semi["wins"][first] == 1 and semi["winner"] is None
-        assert find(client, "final-1")["teams"][0] is None
-        win(client, "semi-1", first)
-        assert find(client, "semi-1")["winner"]["id"] == first
+        assert semi["best_of"] == 1 and semi["wins"][first] == 1
+        assert semi["winner"]["id"] == first
+        assert find(client, "final-1")["teams"][0]["id"] == first
         assert client.post("/api/knockout/matches/semi-1/next", json={}).status_code == 409
         semi2 = find(client, "semi-2")
-        a, b = [team["id"] for team in semi2["teams"]]
-        win(client, "semi-2", a)
+        b = semi2["teams"][1]["id"]
         win(client, "semi-2", b)
-        assert find(client, "semi-2")["winner"] is None
-        win(client, "semi-2", b)
-        assert find(client, "semi-2")["wins"] == {a: 1, b: 2}
+        assert find(client, "semi-2")["winner"]["id"] == b
+        assert client.post("/api/knockout/matches/semi-2/next", json={}).status_code == 409
         assert [team["id"] for team in find(client, "final-1")["teams"]] == [first, b]
-        for winner in (first, b):
-            win(client, "final-1", winner)
+        win(client, "final-1", b, points=1.25)
         assert client.get("/api/bracket").json()["champion"] is None
+        assert find(client, "final-1")["wins"][b] == 1
+        if split_final:
+            win(client, "final-1", first)
+            assert client.get("/api/bracket").json()["champion"] is None
         final_game, _ = win(client, "final-1", b)
         assert final_game["remaining"] == {"B": 900, "W": 900}
         assert client.get("/api/bracket").json()["champion"]["id"] == b
@@ -98,11 +100,30 @@ def test_series_and_names_survive_restart_without_new_roster(tmp_path):
         assert initialize(client).status_code == 200
         for index in range(1, 5):
             win(client, f"quarter-{index}")
-        _, winner = win(client, "semi-1")
+        win(client, "semi-1")
+        win(client, "semi-2")
+        _, winner = win(client, "final-1")
         before = client.get("/api/bracket").json()
     with TestClient(create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True, bootstrap=True)) as client:
         assert client.get("/api/bracket").json() == before
         assert len(client.get("/api/state").json()["teams"]) == 8
+        win(client, "final-1", winner)
+        assert client.get("/api/bracket").json()["champion"]["id"] == winner
+
+
+def test_upgrade_preserves_started_legacy_semi_but_updates_unstarted_semi(tmp_path):
+    app = create_app(tmp_path, engine=TestEngine(), duel=True, knockout=True)
+    with TestClient(app) as client:
+        assert initialize(client).status_code == 200
+        for index in range(1, 5):
+            win(client, f"quarter-{index}")
+        _, winner = win(client, "semi-1")
+        # Model a saved v0.8.0 event: this semifinal was opened as BO3.
+        app.state.store.state["games"][-1]["knockout_best_of"] = 3
+        app.state.store.state["knockout"]["best_of"]["semi"] = 3
+        assert find(client, "semi-1")["winner"] is None
+        assert find(client, "semi-1")["best_of"] == 3
+        assert find(client, "semi-2")["best_of"] == 1
         win(client, "semi-1", winner)
         assert find(client, "semi-1")["winner"]["id"] == winner
 

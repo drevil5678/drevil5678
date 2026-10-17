@@ -638,7 +638,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
                         "mars_points": [0, 0], "checked_in": True, "eligibility_checked": True, "order": index,
                         "play_code": new_team_code(team["play_code"] for team in state["teams"])})
                 state["knockout"] = {"entrants": [team["id"] for team in state["teams"]],
-                                      "best_of": {"quarter": 1, "semi": 3, "final": 3}}
+                                      "best_of": {"quarter": 1, "semi": 1, "final": 3}}
                 event("knockout_setup", {"teams": names, "best_of": state["knockout"]["best_of"]})
                 store.save()
                 return event_bracket()
