@@ -50,11 +50,11 @@ jobs:
 
       - name: Build independent eight-team knockout package
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\build_duel_bundle.py --knockout --source dist\yanghai-windows-lan-v0.8.1 --output dist\yanghai-windows-knockout-v0.8.1
+        run: .\.venv\Scripts\python.exe scripts\build_duel_bundle.py --knockout --source dist\yanghai-windows-lan-v0.8.1 --output dist\yanghai-windows-knockout-v0.8.1-port8001
 
       - name: Check eight-team executable with real AI, restart and final BO3
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\knockout_smoke.py --executable dist\yanghai-windows-knockout-v0.8.1\YanghaiKnockout.exe
+        run: .\.venv\Scripts\python.exe scripts\knockout_smoke.py --executable dist\yanghai-windows-knockout-v0.8.1-port8001\YanghaiKnockout.exe
       - name: Check GPU bundle, strict GPU mode, CPU fallback and real 12-table benchmark
         shell: pwsh
         run: .\.venv\Scripts\python.exe scripts\gpu_package_smoke.py --executable dist\yanghai-windows-lan-v0.8.1\YanghaiTournament.exe
@@ -93,9 +93,9 @@ jobs:
       - name: Provide eight-team knockout ZIP and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: yanghai-windows-knockout-v0.8.1
+          name: yanghai-windows-knockout-v0.8.1-port8001
           path: |
-            dist/yanghai-windows-knockout-v0.8.1.zip
-            dist/yanghai-windows-knockout-v0.8.1.zip.sha256
+            dist/yanghai-windows-knockout-v0.8.1-port8001.zip
+            dist/yanghai-windows-knockout-v0.8.1-port8001.zip.sha256
           if-no-files-found: error
           retention-days: 14

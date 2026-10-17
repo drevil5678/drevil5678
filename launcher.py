@@ -72,12 +72,15 @@ def defaults():
     }
 
 
-def load_settings(filename):
+def load_settings(filename, *, default_port=None):
     filename = Path(filename).resolve()
+    initial = defaults()
+    if default_port is not None:
+        initial["port"] = default_port
     if not filename.exists():
         filename.parent.mkdir(parents=True, exist_ok=True)
         with filename.open("x", encoding="utf-8") as f:
-            json.dump(defaults(), f, ensure_ascii=False, indent=2)
+            json.dump(initial, f, ensure_ascii=False, indent=2)
             f.write("\n")
     values = json.loads(filename.read_text(encoding="utf-8-sig"))
     if not isinstance(values, dict):
@@ -85,7 +88,7 @@ def load_settings(filename):
     unknown = set(values) - set(defaults())
     if unknown:
         raise ValueError("未知的設定欄位：" + ", ".join(sorted(unknown)))
-    settings = {**defaults(), **values}
+    settings = {**initial, **values}
     if not isinstance(settings["host"], str) or not settings["host"]:
         raise ValueError("host 必須是 IPv4 位址或主機名稱")
     if type(settings["port"]) is not int or not 1 <= settings["port"] <= 65535:
@@ -200,7 +203,8 @@ def main(argv=None):
     practice_mode = args.practice
     listener, stop = None, threading.Event()
     try:
-        settings = load_settings(args.config or base_directory()/("knockout.json" if args.knockout else "duel.json" if args.duel else "tournament.json"))
+        settings = load_settings(args.config or base_directory()/("knockout.json" if args.knockout else "duel.json" if args.duel else "tournament.json"),
+                                 default_port=8001 if args.knockout else None)
         local_mode = args.practice or args.duel or args.knockout
         host = "127.0.0.1" if local_mode else "0.0.0.0" if args.lan or args.practice_lan else args.host if args.host is not None else settings["host"]
         port = args.port if args.port is not None else 8001 if args.knockout else 8002 if args.duel else 8001 if practice_mode else settings["port"]

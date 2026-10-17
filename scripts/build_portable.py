@@ -120,7 +120,7 @@ def build(output):
             shutil.copy2(bundle/"YanghaiTournament.exe", bundle/"YanghaiDuel.exe")
             shutil.copy2(bundle/"YanghaiTournament.exe", bundle/"YanghaiKnockout.exe")
             (bundle/"Start-Knockout-Offline.cmd").write_text(
-                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiKnockout.exe" --no-pause\nif errorlevel 1 pause\n',
+                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiKnockout.exe" --port 8001 --no-pause\nif errorlevel 1 pause\n',
                 encoding="ascii")
             (bundle/"Start-Duel-Offline.cmd").write_text(
                 '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiDuel.exe" --no-pause\nif errorlevel 1 pause\n',
