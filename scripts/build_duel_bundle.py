@@ -17,7 +17,7 @@ def build(source, output, knockout=False):
     required = ["_internal", "katago", "model", "config", "BUILD-INFO.json"]
     if knockout:
         required += ["katago-gpu", "TEAM-CODES.csv", "TEAM-CODES.html"]
-    required += (["YanghaiFinalFourLAN.exe", "Start-FinalFour-LAN-8008.cmd", "FINAL-FOUR-LAN-READ-ME.md"] if knockout
+    required += (["YanghaiFinalFourLAN.exe", "Start-FinalFour-LAN-8080.cmd", "FINAL-FOUR-LAN-READ-ME.md"] if knockout
                  else ["YanghaiDuel.exe", "Start-Duel-Offline.cmd", "DUEL-READ-ME.md"])
     if any(not (source / item).exists() for item in required):
         raise RuntimeError("Windows 建置缺少對戰套件所需檔案")

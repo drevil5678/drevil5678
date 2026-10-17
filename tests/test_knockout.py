@@ -36,7 +36,7 @@ def win(client, ident, winner=None, points=1, **options):
 
 def test_builtin_roster_and_host_only_four_team_selection(tmp_path):
     app = create_app(tmp_path, engine=TestEngine(), knockout=True)
-    with TestClient(app, base_url="http://192.168.50.10:8008", client=("192.168.50.11", 1234)) as client:
+    with TestClient(app, base_url="http://192.168.50.10:8080", client=("192.168.50.11", 1234)) as client:
         teams = client.get("/api/state").json()["teams"]
         assert [team["name"] for team in teams] == [team[2] for team in INITIAL_ROSTER]
         ids = [team["id"] for team in teams]
@@ -97,7 +97,7 @@ def test_both_semifinals_can_run_together_without_duplicate_games(tmp_path):
 
 def test_codes_validate_on_backend_for_remote_players_and_do_not_grant_host_access(tmp_path):
     app = create_app(tmp_path, engine=TestEngine(), knockout=True)
-    with TestClient(app, base_url="http://192.168.50.10:8008", client=("192.168.50.12", 4321)) as client:
+    with TestClient(app, base_url="http://192.168.50.10:8080", client=("192.168.50.12", 4321)) as client:
         assert initialize(client).status_code == 200
         game = client.post("/api/knockout/matches/semi-1/next", headers=admin(client), json={}).json()
         path = f"/api/games/{game['id']}"

@@ -21,7 +21,7 @@ from server.initial_roster import INITIAL_CODES, INITIAL_ROSTER
 def main(executable=None, port=None):
     from launcher import defaults
     explicit_port = port
-    port = port or 8008
+    port = port or 8080
     interfaces = network_info("0.0.0.0", port)["interfaces"]
     assert interfaces, "a LAN IPv4 is required for the real network smoke test"
     address = interfaces[0]["address"]
@@ -34,7 +34,7 @@ def main(executable=None, port=None):
             config = program / "final-four-lan.json"
             assert not config.exists(), "package must start with a fresh four-team configuration"
             # Exercise the actual double-click entry point, including spaces in its path.
-            starter = program / "Start-FinalFour-LAN-8008.cmd"
+            starter = program / "Start-FinalFour-LAN-8080.cmd"
             command = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "call", str(starter), "--no-browser"]
             original_config = None
         else:
@@ -42,7 +42,7 @@ def main(executable=None, port=None):
             settings = defaults()
             for key in ("katago_bin", "katago_model", "katago_config", "katago_gpu_bin", "katago_gpu_config"):
                 settings[key] = str(ROOT / settings[key])
-            settings.update(data_dir=str(program / "data"), open_browser=False, host="0.0.0.0", port=8008)
+            settings.update(data_dir=str(program / "data"), open_browser=False, host="0.0.0.0", port=8080)
             config = program / "final-four-lan.json"
             original_config = json.dumps(settings)
             config.write_text(original_config, encoding="utf-8")
@@ -81,7 +81,7 @@ def main(executable=None, port=None):
                             raise AssertionError("knockout executable did not start")
                         if original_config is None:
                             original_config = config.read_text(encoding="utf-8")
-                            assert json.loads(original_config)["port"] == 8008
+                            assert json.loads(original_config)["port"] == 8080
                         assert (program / "final-four-lan-data/tournament.sqlite3").exists()
                         assert client.get("/").status_code == client.get("/static/knockout.js").status_code == 200
                         admin_token = (program / "final-four-lan-data/admin-token").read_text().strip()
@@ -197,7 +197,7 @@ def main(executable=None, port=None):
         report = {"passed": True, "packaged_app": bool(executable), "platform": sys.platform,
                   "port": port, "default_port": explicit_port is None, "lan_address": address, "bind_host": "0.0.0.0",
                   "entrypoint": "Windows CMD" if executable else "source",
-                  "fresh_configuration_port": 8008, "isolated_final_four_data": True,
+                  "fresh_configuration_port": 8080, "isolated_final_four_data": True,
                   "real_ai_games": 1, "other_games": "organizer adjudication to verify advancement",
                   "builtin_eighteen_team_dropdown": True, "backend_team_codes": True, "simultaneous_semifinals": True, "semifinal_bo1": True, "final_bo3": True,
                   "final_ten_five_minutes": True,

@@ -1,6 +1,6 @@
 "use strict";
 const {chromium}=require("playwright"),fs=require("fs"),path=require("path"),os=require("os"),{spawn}=require("child_process");
-const root=path.resolve(__dirname,".."),temp=fs.mkdtempSync(path.join(os.tmpdir(),"yanghai-final-four-lan-browser-")),port=8008;
+const root=path.resolve(__dirname,".."),temp=fs.mkdtempSync(path.join(os.tmpdir(),"yanghai-final-four-lan-browser-")),port=8080;
 const address=Object.values(os.networkInterfaces()).flat().find(item=>item.family==="IPv4"&&!item.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(item.address)).address,base=`http://${address}:${port}`;
 const config=path.join(temp,"final-four-lan.json");
 fs.writeFileSync(config,JSON.stringify({port,data_dir:path.join(temp,"data"),open_browser:false,katago_bin:path.join(root,".runtime/katago/squashfs-root/AppRun"),katago_model:path.join(root,".runtime/model.txt.gz"),katago_config:path.join(root,".runtime/analysis.cfg")}));

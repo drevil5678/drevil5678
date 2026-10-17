@@ -119,8 +119,8 @@ def build(output):
         if os.name == "nt":
             shutil.copy2(bundle/"YanghaiTournament.exe", bundle/"YanghaiDuel.exe")
             shutil.copy2(bundle/"YanghaiTournament.exe", bundle/"YanghaiFinalFourLAN.exe")
-            (bundle/"Start-FinalFour-LAN-8008.cmd").write_text(
-                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiFinalFourLAN.exe" --port 8008 --no-pause %*\nif errorlevel 1 pause\n',
+            (bundle/"Start-FinalFour-LAN-8080.cmd").write_text(
+                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiFinalFourLAN.exe" --port 8080 --no-pause %*\nif errorlevel 1 pause\n',
                 encoding="ascii")
             (bundle/"Start-Duel-Offline.cmd").write_text(
                 '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiDuel.exe" --no-pause\nif errorlevel 1 pause\n',
