@@ -203,7 +203,7 @@ def main(argv=None):
         settings = load_settings(args.config or base_directory()/("knockout.json" if args.knockout else "duel.json" if args.duel else "tournament.json"))
         local_mode = args.practice or args.duel or args.knockout
         host = "127.0.0.1" if local_mode else "0.0.0.0" if args.lan or args.practice_lan else args.host if args.host is not None else settings["host"]
-        port = args.port if args.port is not None else 8003 if args.knockout else 8002 if args.duel else 8001 if practice_mode else settings["port"]
+        port = args.port if args.port is not None else 8001 if args.knockout else 8002 if args.duel else 8001 if practice_mode else settings["port"]
         if not 1 <= port <= 65535:
             raise ValueError("port 必須是 1–65535")
         os.environ["TOURNAMENT_DATA"] = settings["data_dir"]

@@ -12,12 +12,13 @@ import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.integrated_practice_smoke import stop, unused_port
+from scripts.integrated_practice_smoke import stop
 
 
 def main(executable=None, port=None):
     from launcher import defaults
-    port = port or unused_port()
+    explicit_port = port
+    port = port or 8001
     with tempfile.TemporaryDirectory(prefix="yanghai-knockout-") as directory:
         temp = Path(directory)
         originals = {}
@@ -42,7 +43,9 @@ def main(executable=None, port=None):
         config = temp / "knockout.json"
         original_config = json.dumps(settings)
         config.write_text(original_config, encoding="utf-8")
-        command += ["--config", str(config), "--port", str(port), "--no-browser", "--no-pause"]
+        command += ["--config", str(config), "--no-browser", "--no-pause"]
+        if explicit_port is not None:
+            command += ["--port", str(port)]
         environment = os.environ.copy()
         for key in ("KATAGO_BIN", "KATAGO_MODEL", "KATAGO_CONFIG", "KATAGO_ENGINE_MODE", "TOURNAMENT_DATA",
                     "AI_CONCURRENCY", "KATAGO_GPU_BIN", "KATAGO_GPU_CONFIG", "AI_GPU_CONCURRENCY", "KATAGO_GPU_DEVICE"):
@@ -164,6 +167,7 @@ def main(executable=None, port=None):
                 finally:
                     stop(process)
         report = {"passed": True, "packaged_app": bool(executable), "platform": sys.platform,
+                  "port": port, "default_port": explicit_port is None,
                   "real_ai_games": 1, "other_games": "organizer adjudication to verify advancement",
                   "manual_eight_names": True, "quarter_and_semifinal_bo1": True, "final_bo3": True,
                   "final_two_zero": True, "restart_preserves_board_and_names": True,
