@@ -151,7 +151,7 @@ def main(executable=None, port=None):
                             assert match("semi-2")["winner"]["id"] == c
                             assert client.post("/api/knockout/matches/semi-2/next", json={}).status_code == 409
                             final, _ = host_win("final-1", c, device_a=True)
-                            assert final["remaining"] == {"B": 600, "W": 900}
+                            assert final["remaining"] == {"B": 300, "W": 600}
                             assert client.get("/api/bracket").json()["champion"] is None
                             host_win("final-1", c)
                             assert client.get("/api/bracket").json()["champion"]["id"] == c
@@ -170,6 +170,7 @@ def main(executable=None, port=None):
                   "port": port, "default_port": explicit_port is None,
                   "real_ai_games": 1, "other_games": "organizer adjudication to verify advancement",
                   "manual_eight_names": True, "quarter_and_semifinal_bo1": True, "final_bo3": True,
+                  "final_ten_five_minutes": True,
                   "final_two_zero": True, "restart_preserves_board_and_names": True,
                   "champion_recorded": True, "sgf_and_json": True, "formal_and_duel_data_untouched": True}
         (ROOT / ".runtime").mkdir(exist_ok=True)

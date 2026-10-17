@@ -22,6 +22,8 @@ async function until(action,message){for(let i=0;i<300;i++){if(await action())re
  async function state(){return page.evaluate(async()=> (await fetch("/api/state")).json());}
  async function game(){return(await state()).games.at(-1);}
  async function match(id){return(await state()).bracket.stages.flatMap(stage=>stage.matches).find(match=>match.id===id);}
+ assert((await page.locator("#rules-summary").innerText()).includes("所有階段每隊 10 分鐘"),"Clock summary did not update");
+ assert(!(await page.locator("#guide-clock").innerText()).includes("15 分鐘"),"Old championship clock remains in instructions");
  assert((await state()).teams.length===8,"Default roster leaked into manual tournament");
  assert((await match("quarter-1")).teams[1].name===names[1],"Manual pairing order changed");
  await page.locator('[data-next-match="quarter-1"]').click();await page.locator("#roll-dice").waitFor();
@@ -49,6 +51,7 @@ async function until(action,message){for(let i=0;i<300;i++){if(await action())re
   await arena();await until(async()=>await page.locator(`[data-next-match="${id}"]`).isEnabled()&&(await page.locator(`[data-next-match="${id}"]`).innerText()).startsWith("開啟"),"Next game not enabled: "+id);
   const count=(await state()).games.length;await page.locator(`[data-next-match="${id}"]`).click();await until(async()=>(await state()).games.length===count+1,"Next game not created");
   const current=await game();winner=winner||current.seats.B.team;const color=current.seats.B.team===winner?"B":"W";
+  assert(current.remaining.B===600&&current.remaining.W===600,"Expected ten-minute clocks at "+id);
   await page.locator(`#duel-award-${color}`).filter({hasText:current.seats[color].name}).click();
   await page.locator("#match-status").filter({hasText:current.seats[color].name+" 獲勝"}).waitFor();
   await until(async()=>!!(await game()).result,"Referee result not saved");return winner;

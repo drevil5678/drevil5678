@@ -19,8 +19,8 @@ def find(client, ident):
     return next(match for stage in tree["stages"] for match in stage["matches"] if match["id"] == ident)
 
 
-def win(client, ident, winner=None, points=1):
-    response = client.post(f"/api/knockout/matches/{ident}/next", json={})
+def win(client, ident, winner=None, points=1, **options):
+    response = client.post(f"/api/knockout/matches/{ident}/next", json=options)
     assert response.status_code == 200, response.text
     game = response.json()
     winner = winner or game["seats"]["B"]["team"]
@@ -69,14 +69,15 @@ def test_quarter_and_semi_bo1_final_bo3_and_single_point25_win(tmp_path, split_f
         assert find(client, "semi-2")["winner"]["id"] == b
         assert client.post("/api/knockout/matches/semi-2/next", json={}).status_code == 409
         assert [team["id"] for team in find(client, "final-1")["teams"]] == [first, b]
-        win(client, "final-1", b, points=1.25)
+        first_final, _ = win(client, "final-1", b, points=1.25, device_a=True)
+        assert first_final["remaining"] == {"B": 300, "W": 600}
         assert client.get("/api/bracket").json()["champion"] is None
         assert find(client, "final-1")["wins"][b] == 1
         if split_final:
             win(client, "final-1", first)
             assert client.get("/api/bracket").json()["champion"] is None
         final_game, _ = win(client, "final-1", b)
-        assert final_game["remaining"] == {"B": 900, "W": 900}
+        assert final_game["remaining"] == {"B": 600, "W": 600}
         assert client.get("/api/bracket").json()["champion"]["id"] == b
         assert client.post("/api/knockout/matches/final-1/next", json={}).status_code == 409
         exported = client.get("/api/duel/export")

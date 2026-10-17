@@ -124,7 +124,8 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
         return knockout_bracket(state) if knockout else bracket(state)
 
     def time_limit(game, own_device):
-        return (600. if own_device else 900.) if game.get("stage") == "final" or game.get("championship_clock") else (300. if own_device else 600.)
+        championship = not knockout and (game.get("stage") == "final" or game.get("championship_clock"))
+        return (600. if own_device else 900.) if championship else (300. if own_device else 600.)
 
     def init_pregame(game):
         if "pregame" not in game:
@@ -146,12 +147,16 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
                     captured[color] += max(0, history[index].count(other) - history[index + 1].count(other))
             game["captures"] = captured
         if game.get("time_control_version") != "v0.5.0":
-            if game.get("stage") == "final" and game["status"] != "finished":
+            if not knockout and game.get("stage") == "final" and game["status"] != "finished":
                 for color in ("B", "W"):
                     game["remaining"][color] += 300.
             game["time_control_version"] = "v0.5.0"
         if game["status"] == "ready":
             init_pregame(game)
+            if knockout:
+                # Apply the new limits before play; keep elapsed clocks of started games.
+                for color, info in game["seats"].items():
+                    game["remaining"][color] = time_limit(game, info["own_device"])
 
     def event(kind, detail):
         store.record_event({"time": time.time(), "kind": kind, "detail": detail})

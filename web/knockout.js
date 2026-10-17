@@ -48,7 +48,7 @@ class KnockoutMode {
     const target=$("knockout-matches"); target.replaceChildren();
     if (tree.champion) target.append(el("p", `冠軍：${tree.champion.name}`, "champion-banner"));
     if (!state.knockout.initialized) return;
-    target.append(el("p", "八強、四強每局每隊 10 分鐘（攜帶電子產品者 5 分鐘）；冠軍戰每局 15 分鐘（攜帶電子產品者 10 分鐘）。每局開啟前確認設備選項。"));
+    target.append(el("p", "八強、四強與冠軍戰每局每隊均為 10 分鐘（攜帶電子產品者 5 分鐘）。每局開啟前確認設備選項。"));
     for (const stage of tree.stages) {
       target.append(el("h2", stage.label));
       const grid=el("div",undefined,"grid");
