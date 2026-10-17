@@ -11,11 +11,12 @@ class DuelMode {
     if (!this.enabled) {
       this.enabled = true;
       document.body.classList.add("duel-mode");
-      document.title = "單機雙隊 PK · 楊海分站賽";
+      document.title = state.knockout ? "八強淘汰賽 · 單機版" : "單機雙隊 PK · 楊海分站賽";
       diceStage.shared = true;
-      document.querySelector(".brand").replaceChildren(el("span", "單機雙隊 PK"));
+      document.querySelector(".brand").replaceChildren(el("span", state.knockout ? "八強淘汰賽 · 單機版" : "單機雙隊 PK"));
       const heading = document.querySelector("#arena .heading");
-      heading.querySelector("div").replaceChildren(el("h1", "兩支隊伍，一台電腦。"), el("p", "不需網路，由雙方輪流操作。使用正式判勝規則，紀錄獨立保存；比賽結果請交主辦登錄。"));
+      heading.querySelector("div").replaceChildren(el("h1", state.knockout ? "八支隊伍，爭取最後一勝。" : "兩支隊伍，一台電腦。"), el("p", state.knockout ? "八強一局定勝負，四強與冠軍戰三戰兩勝。兩隊在這台電腦輪流操作，每局重新擲骰猜先。" : "不需網路，由雙方輪流操作。使用正式判勝規則，紀錄獨立保存；比賽結果請交主辦登錄。"));
+      if (!state.knockout) {
       const panel = el("article", undefined, "panel");
       panel.id = "duel-setup";
       panel.innerHTML = `
@@ -58,6 +59,7 @@ class DuelMode {
           } finally { submit.disabled = (snapshot.games || []).some(game => game.status !== "finished"); }
         });
       };
+      }
       const controls = el("article", undefined, "panel");
       controls.id = "duel-controls";
       controls.append(el("h2", "同機輪流操作"));
@@ -80,10 +82,11 @@ class DuelMode {
       }
       controls.append(actions, el("small", "主辦裁定前可先暫停；分析時雙方計時暫停。關閉程式會保存棋局，重啟後請按恢復對弈。"));
       document.querySelector("#match aside").prepend(controls);
-      $("back").textContent = "← 返回備用對戰與紀錄";
+      $("back").textContent = state.knockout ? "← 返回八強對戰與紀錄" : "← 返回備用對戰與紀錄";
       const latest = state.games.at(-1);
-      if (latest && !location.hash.startsWith("#game/")) await openGame(latest.id);
+      if (!state.knockout && latest && !location.hash.startsWith("#game/")) await openGame(latest.id);
     }
+    if (state.knockout) return;
     const fields = $("duel-form").elements, locked = !!state.games.length;
     for (const key of ["board_size", "komi", "rules", "visits"]) {
       if (locked || !this.settingsLoaded) fields[key].value = state.settings[key];
@@ -120,6 +123,11 @@ class DuelMode {
 
   async action(action, extra = {}) {
     await api(`/api/duel/games/${currentGame.id}/action`, {method: "POST", body: {action, ...extra}});
+    if (snapshot?.knockout) {
+      snapshot = await api("/api/state");
+      knockoutMode.sync(snapshot);
+      renderArena();
+    }
     await refreshGame();
   }
 }

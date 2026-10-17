@@ -11,4 +11,7 @@ tournament.json
 duel.json
 duel-data/
 duel-only/
+knockout.json
+knockout-data/
+knockout-only/
 data/

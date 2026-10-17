@@ -29,6 +29,7 @@ let practiceControlBusy = false;
 let bracketState, rollingTeam = null, pregameBusy = false;
 const diceStage = new DiceStage(() => snapshot?.duel ? renderMatch() : renderPregame());
 const duelMode = new DuelMode();
+const knockoutMode = new KnockoutMode();
 let selectedRecordTeam = sessionStorage.getItem("teamId") || null;
 let adminToken = sessionStorage.getItem("adminToken") || "",
   seatToken = "",
@@ -84,7 +85,7 @@ async function api(path, { method = "GET", body, token } = {}) {
   return response.json();
 }
 function showView(view) {
-  if (snapshot?.duel && !["arena", "match"].includes(view)) view = "arena";
+  if (snapshot?.duel && !["arena", "match", ...(snapshot.knockout ? ["bracket"] : [])].includes(view)) view = "arena";
   currentView = view;
   document
     .querySelectorAll(".view")
@@ -158,7 +159,7 @@ function renderArena() {
     const card = el("article", undefined, "game-card");
     card.dataset.gameId = g.id;
     card.append(
-      el("span", `${snapshot.duel ? g.championship_clock ? "冠軍戰單局" : "備用對戰" : stages[g.stage] || "對戰"} · TABLE ${String(g.table).padStart(2, "0")}`, "eyebrow"),
+      el("span", `${snapshot.knockout ? `${stages[g.stage]} · 第 ${g.round} 局` : snapshot.duel ? g.championship_clock ? "冠軍戰單局" : "備用對戰" : stages[g.stage] || "對戰"} · TABLE ${String(g.table).padStart(2, "0")}`, "eyebrow"),
       el("h3", `${g.seats.B.name}  vs  ${g.seats.W.name}`),
       el("span", gameStatus(g), "badge"),
       el(
@@ -222,7 +223,7 @@ async function refreshBracket() {
       for (const team of match.teams) {
         const row = el("div", undefined, "bracket-team" + (team && match.winner?.id === team.id ? " winner" : ""));
         row.append(team ? button(team.name, () => openTeam(team.id), "secondary team-link") : el("span", "待定"));
-        if (team && stage.stage === "final") row.append(el("strong", `${match.wins[team.id] || 0} 勝`));
+        if (team && (match.best_of === 3 || stage.stage === "final")) row.append(el("strong", `${match.wins[team.id] || 0} 勝`));
         if (team && match.winner?.id === team.id) row.append(el("span", stage.stage === "final" ? "冠軍" : "晉級", "badge"));
         card.append(row);
       }
@@ -326,7 +327,7 @@ function renderMatch() {
     el("h1", `${g.seats.B.name}　vs　${g.seats.W.name}`),
     el(
       "span",
-      snapshot?.duel ? `${g.championship_clock ? "冠軍戰單局" : "備用對戰"} · 第 ${g.round} 局` : `${stages[g.stage]} · 第 ${g.round} 輪 · 第 ${g.table} 桌`,
+      snapshot?.knockout ? `${stages[g.stage]} · 第 ${g.table} 組 · 第 ${g.round} 局${g.knockout_best_of === 3 ? "（三戰兩勝）" : "（一局定勝負）"}` : snapshot?.duel ? `${g.championship_clock ? "冠軍戰單局" : "備用對戰"} · 第 ${g.round} 局` : `${stages[g.stage]} · 第 ${g.round} 輪 · 第 ${g.table} 桌`,
       "badge",
     ),
   );
@@ -1108,6 +1109,7 @@ async function poll() {
   try {
     snapshot = await api("/api/state");
     await duelMode.sync(snapshot);
+    knockoutMode.sync(snapshot);
     renderArena();
     if (selectedGame) await refreshGame();
     if (currentView === "records") await refreshRecords();

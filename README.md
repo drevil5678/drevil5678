@@ -1,12 +1,14 @@
 # 楊海分站賽：AI 協作圍棋賽務系統
 
-目前版本 **v0.7.1**。依主辦方提供的章程與後續指定實作：18 隊預載、五輪瑞士賽、八強淘汰賽、每局骰子猜先，以及同一網址的單機練習。活動為 **2026-10-17 13:00–18:00，Asia/Taipei**。
+目前版本 **v0.8.0**。依主辦方提供的章程與後續指定實作：18 隊預載、五輪瑞士賽、八強淘汰賽、每局骰子猜先，以及同一網址的單機練習。活動為 **2026-10-17 13:00–18:00，Asia/Taipei**。
 
-另提供 **`yanghai-windows-duel-v0.7.1` 單機雙隊 PK 備用包**。解壓後雙擊 **YanghaiDuel.exe**，兩隊共用一台電腦，無需網路或安裝 Python。保留正式猜先、計時與 40% 判負，預設使用 CPU；棋局存到獨立的 `duel-data/`。結果需由主辦在原區網賽局登錄，詳見[單機雙隊備用版](docs/單機雙隊備用版.md)。
+新增獨立 **`yanghai-windows-knockout-v0.8.0` 八強單機版**：自行輸入八個隊名，相鄰配對；八強一局定勝負，四強與冠軍戰三戰兩勝。雙擊 **YanghaiKnockout.exe**，不需先打瑞士賽；資料存於 `knockout-data/`，與原賽事及雙隊備用版分開。勝局自動累計並帶入下一階段，詳見[八強淘汰賽單機版](docs/八強淘汰賽單機版.md)。
+
+另提供 **`yanghai-windows-duel-v0.8.0` 單機雙隊 PK 備用包**。解壓後雙擊 **YanghaiDuel.exe**，兩隊共用一台電腦，無需網路或安裝 Python。保留正式猜先、計時與 40% 判負，預設使用 CPU；棋局存到獨立的 `duel-data/`。結果需由主辦在原區網賽局登錄，詳見[單機雙隊備用版](docs/單機雙隊備用版.md)。
 
 ## 開始使用
 
-登入 GitHub，從 [Windows 建置頁](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 的最新成功紀錄下載 `yanghai-windows-lan-v0.7.1`。解壓附件與內層程式 ZIP，保留全部檔案，雙擊 **Start-LAN.cmd**。主機不需 Python／uv，其他電腦只需瀏覽器。
+登入 GitHub，從 [Windows 建置頁](https://github.com/drevil5678/drevil5678/actions/workflows/windows-build.yml) 的最新成功紀錄下載 `yanghai-windows-lan-v0.8.0`。解壓附件與內層程式 ZIP，保留全部檔案，雙擊 **Start-LAN.cmd**。主機不需 Python／uv，其他電腦只需瀏覽器。
 
 1. 使用本機 `data/admin-token` 登入主辦管理，在「區域網路開賽」複製參賽網址。
 2. 18 隊與固定點棋碼已內建，所有隊伍預設完成資格確認及檢錄。「暫無」是有效姓名，不必補人。無需火星積分。

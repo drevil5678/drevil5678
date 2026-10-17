@@ -26,6 +26,7 @@ from .tournament import OFFICIAL_STAGES, SWISS_ROUNDS, awards, bracket, pair_swi
 from .records import team_records
 from .scoring import score_position
 from .local_practice import install_local_practice
+from .knockout import bracket as knockout_bracket, next_game as next_knockout_game
 
 ROOT = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 
@@ -101,14 +102,26 @@ class DuelInput(SettingsInput):
     device_b: bool = False
 
 
-def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=False):
+class KnockoutSetup(SettingsInput):
+    names: list[str] = Field(min_length=8, max_length=8)
+
+
+class KnockoutGame(BaseModel):
+    device_a: bool = False
+    device_b: bool = False
+
+
+def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=False, knockout=False):
     store = Store(runtime or os.getenv("TOURNAMENT_DATA", str(ROOT / ".runtime")))
-    initial_roster_loaded = store.prepare_initial_roster() if bootstrap and not duel else False
+    initial_roster_loaded = store.prepare_initial_roster() if bootstrap and not duel and not knockout else False
     state = store.state
     ai = engine or KataGo(store.runtime)
     lock = asyncio.Lock()
     tasks = set()
     app = None
+
+    def event_bracket():
+        return knockout_bracket(state) if knockout else bracket(state)
 
     def time_limit(game, own_device):
         return (600. if own_device else 900.) if game.get("stage") == "final" or game.get("championship_clock") else (300. if own_device else 600.)
@@ -383,7 +396,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
     async def health():
         return {"ok": True, "ai_ready": not ai.failure, "ai_error": ai.failure,
                 "rules_confirmed": state["settings"]["rules_confirmed"], "games": len(state["games"]),
-                "mode": "duel" if duel else "tournament"}
+                "mode": "knockout" if knockout else "duel" if duel else "tournament"}
 
     @app.get("/api/admin/network")
     async def network_status(request: Request, authorization: str | None = Header(None)):
@@ -403,17 +416,19 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
             result = {"settings": state["settings"], "practice_enabled": state["practice_enabled"], "rounds": state["rounds"],
                     "teams": [{"id": t["id"], "name": t["name"], "order": t["order"]} for t in state["teams"]],
                     "standings": [{k: t[k] for k in ("id", "name", "score", "buchholz", "rank", "order")} for t in standings(state)],
-                    "games": [public_game(g) for g in state["games"] if duel or g["stage"] == "special" or (current and g["round_id"] == current["id"])],
-                    "bracket": bracket(state), "awards": awards(state)}
+                    "games": [public_game(g) for g in state["games"] if duel or knockout or g["stage"] == "special" or (current and g["round_id"] == current["id"])],
+                    "bracket": event_bracket(), "awards": [] if knockout else awards(state)}
             if duel:
                 result["duel"] = {"credentials": {g["id"]: {s["team"]: s["token"] for s in g["seats"].values()}
                                                    for g in state["games"]}}
+            if knockout:
+                result["knockout"] = {"initialized": bool(state.get("knockout"))}
             return result
 
     @app.get("/api/bracket")
     async def get_bracket():
         async with lock:
-            return bracket(state)
+            return event_bracket()
 
     @app.get("/api/admin/state")
     async def admin_state(authorization: str | None = Header(None)):
@@ -574,7 +589,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
             store.save()
             return {"imported": len(parsed)}
 
-    def new_round(stage, number, pairs):
+    def new_round(stage, number, pairs, persist=True):
         rid = uuid.uuid4().hex[:12]
         round_info = {"id": rid, "stage": stage, "number": number}
         state["rounds"].append(round_info)
@@ -595,12 +610,68 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
             init_pregame(game)
             state["games"].append(game)
         event("round", round_info)
-        store.save()
+        if persist:
+            store.save()
         return round_info
+
+    if knockout:
+        def require_knockout_host(authorization):
+            if not duel:
+                require_admin(authorization)
+
+        @app.post("/api/knockout/setup")
+        async def knockout_setup(body: KnockoutSetup, authorization: str | None = Header(None)):
+            require_knockout_host(authorization)
+            names = [name.strip() for name in body.names]
+            if any(not name or len(name) > 60 for name in names) or len(set(names)) != 8:
+                raise HTTPException(400, "請輸入八個不同的隊名，每個隊名最多 60 字")
+            if (body.board_size not in (9, 13, 19) or body.rules not in ("chinese", "japanese")
+                    or not math.isfinite(body.komi) or body.threshold != .40 or not body.allow_pass
+                    or not body.rules_confirmed):
+                raise HTTPException(400, "請確認棋盤、貼目與規則；本版固定 40% 門檻並允許虛手")
+            async with lock:
+                if state.get("knockout") or state["teams"] or state["games"] or state["rounds"]:
+                    raise HTTPException(409, "本屆八強已建立，保留原隊名與賽果；新賽事請使用新的資料夾")
+                state["settings"].update(body.model_dump(include=set(SettingsInput.model_fields)))
+                for index, name in enumerate(names, 1):
+                    state["teams"].append({"id": uuid.uuid4().hex[:12], "name": name, "players": ["隊長", "隊員"],
+                        "mars_points": [0, 0], "checked_in": True, "eligibility_checked": True, "order": index,
+                        "play_code": new_team_code(team["play_code"] for team in state["teams"])})
+                state["knockout"] = {"entrants": [team["id"] for team in state["teams"]],
+                                      "best_of": {"quarter": 1, "semi": 3, "final": 3}}
+                event("knockout_setup", {"teams": names, "best_of": state["knockout"]["best_of"]})
+                store.save()
+                return event_bracket()
+
+        @app.post("/api/knockout/matches/{ident}/next")
+        async def knockout_next(ident: str, body: KnockoutGame, authorization: str | None = Header(None)):
+            require_knockout_host(authorization)
+            async with lock:
+                if ai.failure:
+                    raise HTTPException(503, "AI 尚未就緒，請先排除原因")
+                try:
+                    match, number = next_knockout_game(state, ident)
+                except ValueError as exc:
+                    raise HTTPException(409, str(exc)) from exc
+                teams = [team["id"] for team in match["teams"]]
+                info = new_round(match["stage"], number, [teams], persist=False)
+                info["knockout_match"] = ident
+                game = state["games"][-1]
+                game.update(knockout_match=ident, table=match["number"], knockout_best_of=match["best_of"])
+                for color, device in (("B", body.device_a), ("W", body.device_b)):
+                    game["seats"][color]["own_device"] = device
+                    game["remaining"][color] = time_limit(game, device)
+                init_pregame(game)["armed"] = True
+                game["version"] += 1
+                event("knockout_game", {"game": game["id"], "match": ident, "number": number})
+                store.save()
+                return public_game(game)
 
     if duel:
         @app.post("/api/duel/new")
         async def new_duel(body: DuelInput):
+            if knockout:
+                raise HTTPException(409, "八強版請從對決圖建立下一局")
             # Use the same game, dice, clock and AI implementation as the LAN
             # event. The launcher supplies a completely separate data directory.
             settings = body.model_dump(include=set(SettingsInput.model_fields))
@@ -647,12 +718,14 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
         @app.get("/api/duel/export")
         async def duel_export():
             response = await export("Bearer " + store.admin_token)
-            response.headers["Content-Disposition"] = 'attachment; filename="duel-records.json"'
+            response.headers["Content-Disposition"] = 'attachment; filename="knockout-records.json"' if knockout else 'attachment; filename="duel-records.json"'
             return response
 
     @app.post("/api/admin/special-tables")
     async def special_table(body: SpecialInput, authorization: str | None = Header(None)):
         require_admin(authorization)
+        if knockout:
+            raise HTTPException(409, "八強版請從對決圖建立對戰")
         async with lock:
             if not state["settings"]["rules_confirmed"]:
                 raise HTTPException(409, "請先在設定頁確認正式規則")
@@ -693,6 +766,8 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
     @app.post("/api/admin/rounds/{kind}")
     async def next_round(kind: str, authorization: str | None = Header(None)):
         require_admin(authorization)
+        if knockout:
+            raise HTTPException(409, "獨立八強版不使用瑞士賽，請從對決圖建立下一局")
         async with lock:
             if not state["settings"]["rules_confirmed"]:
                 raise HTTPException(409, "請先在設定頁確認正式規則")
@@ -927,7 +1002,7 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
             for g in result["games"]:
                 for s in g["seats"].values():
                     s.pop("token", None)
-            result["standings"], result["awards"] = standings(state), awards(state)
+            result["standings"], result["awards"] = standings(state), [] if knockout else awards(state)
             for t in result["standings"]:
                 t.pop("play_code", None)
             return Response(json.dumps(result, ensure_ascii=False, indent=2), media_type="application/json",

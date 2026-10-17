@@ -338,6 +338,8 @@ th {
 }
 .duel-mode nav, .duel-mode #seat-form, .duel-mode #round-label,
 .duel-mode #empty, .duel-mode footer { display: none; }
+.duel-mode.knockout-mode nav { display: flex; }
+.knockout-mode nav button:not([data-view="arena"]):not([data-view="bracket"]) { display: none; }
 
 .dice-stage {
   position: absolute;
