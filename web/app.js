@@ -85,6 +85,7 @@ async function api(path, { method = "GET", body, token } = {}) {
   return response.json();
 }
 function showView(view) {
+  if (snapshot?.knockout && !["arena", "match", "bracket", "admin", "records", "guide"].includes(view)) view="arena";
   if (snapshot?.duel && !["arena", "match", ...(snapshot.knockout ? ["bracket"] : [])].includes(view)) view = "arena";
   currentView = view;
   document
@@ -349,10 +350,20 @@ function renderMatch() {
   $("seat-status").textContent = seatColor
     ? `你是 ${seatColor === "B" ? "黑" : "白"} 棋點棋手${g.status === "ready" && !g.pregame?.color_choice ? "（暫定，猜先後確認棋色）" : ""}`
     : "目前為觀戰模式";
+  if (snapshot?.knockout) {
+    const select=$("seat-team-choice"), signature=g.id+":"+Object.values(g.seats).map(s=>s.team).join(":");
+    if (select.dataset.game!==signature) {
+      const previous=seatTeam||select.value;
+      select.replaceChildren(...Object.values(g.seats).map(s=>{const option=el("option",s.name);option.value=s.team;return option;}));
+      if(Object.values(g.seats).some(s=>s.team===previous))select.value=previous;
+      select.dataset.game=signature;
+    }
+    if(seatTeam)select.value=seatTeam;
+  }
   const deviceLocked = g.status !== "ready" || !seatColor || !!g.pregame?.ready?.[seatTeam];
   $("own-device").disabled = deviceLocked;
   $("save-device").disabled = deviceLocked;
-  $("own-device-label").textContent = `本場參考自備設備（${g.stage === "final" ? 10 : 5} 分鐘；未使用為 ${g.stage === "final" ? 15 : 10} 分鐘）`;
+  $("own-device-label").textContent = `本場參考自備設備（${!snapshot?.knockout && g.stage === "final" ? 10 : 5} 分鐘；未使用為 ${!snapshot?.knockout && g.stage === "final" ? 15 : 10} 分鐘）`;
   if (seatColor) $("own-device").checked = g.seats[seatColor].own_device;
   $("pass").disabled = !(
     !moveBusy &&
@@ -649,8 +660,9 @@ $("pass").onclick = () =>
       await sendMove("pass");
   });
 $("back").onclick = () => showView("arena");
-async function joinSeat() {
+async function joinSeat(expectedTeam=null) {
   const s = await api(`/api/games/${selectedGame}/seat`, { token: seatToken });
+  if (expectedTeam && s.team!==expectedTeam) throw new Error("點棋碼與選擇的隊伍不符，請選擇自己的隊伍");
   seatColor = s.color;
   seatTeam = s.team;
   if (s.credential === "team") {
@@ -664,7 +676,7 @@ async function joinSeat() {
 $("seat-form").onsubmit = (event) => {
   event.preventDefault();
   seatToken = $("seat-token").value.trim();
-  safe(joinSeat);
+  safe(()=>joinSeat(snapshot?.knockout ? $("seat-team-choice").value : null));
 };
 $("save-device").onclick = () =>
   safe(async () => {
@@ -699,6 +711,7 @@ async function refreshAdmin() {
   $("admin-content").classList.remove("hidden");
   if (wasHidden) loadSettings();
   renderAdmin();
+  if (snapshot?.knockout) knockoutMode.sync(snapshot);
   try {
     await refreshNetwork();
   } catch (error) {
@@ -884,7 +897,7 @@ function renderAdmin() {
     for (const team of s.teams) { const option = el("option", team.name); option.value = team.id; select.append(option); }
     if (s.teams.some(team => team.id === previous)) select.value = previous;
   }
-  for (const g of s.games.filter((g) => g.round_id === round?.id || g.stage === "special")) {
+  for (const g of s.games.filter((g) => snapshot?.knockout || g.round_id === round?.id || g.stage === "special")) {
     const card = el("article", undefined, "panel"),
       actions = el("div", undefined, "actions");
     card.dataset.gameId = g.id;

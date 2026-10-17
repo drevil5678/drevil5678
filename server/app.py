@@ -103,7 +103,7 @@ class DuelInput(SettingsInput):
 
 
 class KnockoutSetup(SettingsInput):
-    names: list[str] = Field(min_length=4, max_length=4)
+    team_ids: list[str] = Field(min_length=4, max_length=4)
 
 
 class KnockoutGame(BaseModel):
@@ -112,8 +112,10 @@ class KnockoutGame(BaseModel):
 
 
 def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=False, knockout=False):
+    if knockout:
+        duel = False  # LAN players authenticate individually; never publish local-PK seat credentials.
     store = Store(runtime or os.getenv("TOURNAMENT_DATA", str(ROOT / ".runtime")))
-    initial_roster_loaded = store.prepare_initial_roster() if bootstrap and not duel and not knockout else False
+    initial_roster_loaded = store.prepare_initial_roster() if (bootstrap or knockout) and not duel else False
     state = store.state
     ai = engine or KataGo(store.runtime)
     lock = asyncio.Lock()
@@ -621,30 +623,25 @@ def create_app(runtime=None, engine=None, network=None, bootstrap=False, duel=Fa
 
     if knockout:
         def require_knockout_host(authorization):
-            if not duel:
-                require_admin(authorization)
+            require_admin(authorization)
 
         @app.post("/api/knockout/setup")
         async def knockout_setup(body: KnockoutSetup, authorization: str | None = Header(None)):
             require_knockout_host(authorization)
-            names = [name.strip() for name in body.names]
-            if any(not name or len(name) > 60 for name in names) or len(set(names)) != 4:
-                raise HTTPException(400, "請輸入四個不同的隊名，每個隊名最多 60 字")
+            selected = [next((team for team in state["teams"] if team["id"] == ident), None) for ident in body.team_ids]
+            if len(set(body.team_ids)) != 4 or any(team is None for team in selected):
+                raise HTTPException(400, "請從內建名單選擇四支不同隊伍")
             if (body.board_size not in (9, 13, 19) or body.rules not in ("chinese", "japanese")
                     or not math.isfinite(body.komi) or body.threshold != .40 or not body.allow_pass
                     or not body.rules_confirmed):
                 raise HTTPException(400, "請確認棋盤、貼目與規則；本版固定 40% 門檻並允許虛手")
             async with lock:
-                if state.get("knockout") or state["teams"] or state["games"] or state["rounds"]:
+                if state.get("knockout") or state["games"] or state["rounds"]:
                     raise HTTPException(409, "本屆四強已建立，保留原隊名與賽果；新賽事請使用新的資料夾")
                 state["settings"].update(body.model_dump(include=set(SettingsInput.model_fields)))
-                for index, name in enumerate(names, 1):
-                    state["teams"].append({"id": uuid.uuid4().hex[:12], "name": name, "players": ["隊長", "隊員"],
-                        "mars_points": [0, 0], "checked_in": True, "eligibility_checked": True, "order": index,
-                        "play_code": new_team_code(team["play_code"] for team in state["teams"])})
-                state["knockout"] = {"entrants": [team["id"] for team in state["teams"]],
+                state["knockout"] = {"entrants": body.team_ids,
                                       "best_of": {"semi": 1, "final": 3}}
-                event("knockout_setup", {"teams": names, "best_of": state["knockout"]["best_of"]})
+                event("knockout_setup", {"teams": [team["name"] for team in selected], "best_of": state["knockout"]["best_of"]})
                 store.save()
                 return event_bracket()
 

@@ -1,6 +1,6 @@
 # 從 GitHub 下載 Windows v0.8.1
 
-若要四隊直接打四強的單機版，請選 **yanghai-windows-final-four-port8001**。完整解壓後雙擊 **Start-FinalFour-8001.cmd**，網址為 `http://127.0.0.1:8001`。四強一戰決勝，冠軍戰三戰兩勝，詳見[四強賽單機版](四強賽單機版.md)。
+若要四隊直接打四強的區網版，請選 **yanghai-windows-final-four-lan-port8008**。只在主辦主機完整解壓並雙擊 **Start-FinalFour-LAN-8008.cmd**；主辦從 18 隊下拉選四隊，選手用主機的區網 IPv4 加 `:8008` 連線並輸入原隊伍點棋碼。詳見[四強賽區網版](四強賽區網版.md)。
 
 若要一台電腦給兩隊比賽的離線備援，請在同一個成功紀錄的 Artifacts 選 **yanghai-windows-duel-v0.8.1**。完整解壓後雙擊 **YanghaiDuel.exe**，不需要啟動 LAN 版。詳見[單機雙隊備用版](單機雙隊備用版.md)。
 

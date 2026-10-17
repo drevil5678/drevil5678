@@ -1,4 +1,4 @@
-"""Create the CPU-only, offline Windows two-team package from a verified build."""
+"""Create a Windows two-team backup or four-team LAN package from a verified build."""
 import argparse
 import hashlib
 import json
@@ -15,10 +15,12 @@ def build(source, output, knockout=False):
     if provenance["os"] != "Windows":
         raise RuntimeError("Windows 執行檔必須由真正的 Windows 建置產生")
     required = ["_internal", "katago", "model", "config", "BUILD-INFO.json"]
-    required += (["YanghaiFinalFour.exe", "Start-FinalFour-8001.cmd", "FINAL-FOUR-READ-ME.md"] if knockout
+    if knockout:
+        required += ["katago-gpu", "TEAM-CODES.csv", "TEAM-CODES.html"]
+    required += (["YanghaiFinalFourLAN.exe", "Start-FinalFour-LAN-8008.cmd", "FINAL-FOUR-LAN-READ-ME.md"] if knockout
                  else ["YanghaiDuel.exe", "Start-Duel-Offline.cmd", "DUEL-READ-ME.md"])
     if any(not (source / item).exists() for item in required):
-        raise RuntimeError("Windows 建置缺少單機備用版所需檔案")
+        raise RuntimeError("Windows 建置缺少對戰套件所需檔案")
     if list(source.rglob("*.sqlite3*")) or list(source.rglob("admin-token")):
         raise RuntimeError("來源含執行中資料，拒絕打包")
     output.mkdir(parents=True)
@@ -32,7 +34,7 @@ def build(source, output, knockout=False):
     shutil.make_archive(str(output), "zip", root_dir=output.parent, base_dir=output.name)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_suffix(".zip.sha256").write_text(digest + "  " + archive.name + "\n", encoding="utf-8")
-    print(json.dumps({"archive": str(archive), "sha256": digest, "mode": "offline-final-four" if knockout else "offline-duel", "backend": "CPU"}))
+    print(json.dumps({"archive": str(archive), "sha256": digest, "mode": "lan-final-four" if knockout else "offline-duel", "backend": "auto" if knockout else "CPU"}))
 
 
 if __name__ == "__main__":

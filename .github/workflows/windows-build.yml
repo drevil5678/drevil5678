@@ -48,13 +48,13 @@ jobs:
         shell: pwsh
         run: .\.venv\Scripts\python.exe scripts\duel_smoke.py --executable dist\yanghai-windows-duel-v0.8.1\YanghaiDuel.exe
 
-      - name: Build independent four-team knockout package
+      - name: Build LAN four-team knockout package
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\build_duel_bundle.py --knockout --source dist\yanghai-windows-lan-v0.8.1 --output dist\yanghai-windows-final-four-port8001
+        run: .\.venv\Scripts\python.exe scripts\build_duel_bundle.py --knockout --source dist\yanghai-windows-lan-v0.8.1 --output dist\yanghai-windows-final-four-lan-port8008
 
-      - name: Check four-team CMD on port 8001 with real AI, restart and final BO3
+      - name: Check four-team LAN CMD on port 8008 with real AI, restart and final BO3
         shell: pwsh
-        run: .\.venv\Scripts\python.exe scripts\knockout_smoke.py --executable dist\yanghai-windows-final-four-port8001\YanghaiFinalFour.exe
+        run: .\.venv\Scripts\python.exe scripts\knockout_smoke.py --executable dist\yanghai-windows-final-four-lan-port8008\YanghaiFinalFourLAN.exe
       - name: Check GPU bundle, strict GPU mode, CPU fallback and real 12-table benchmark
         shell: pwsh
         run: .\.venv\Scripts\python.exe scripts\gpu_package_smoke.py --executable dist\yanghai-windows-lan-v0.8.1\YanghaiTournament.exe
@@ -93,9 +93,9 @@ jobs:
       - name: Provide four-team knockout ZIP and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: yanghai-windows-final-four-port8001
+          name: yanghai-windows-final-four-lan-port8008
           path: |
-            dist/yanghai-windows-final-four-port8001.zip
-            dist/yanghai-windows-final-four-port8001.zip.sha256
+            dist/yanghai-windows-final-four-lan-port8008.zip
+            dist/yanghai-windows-final-four-lan-port8008.zip.sha256
           if-no-files-found: error
           retention-days: 14

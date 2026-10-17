@@ -118,9 +118,9 @@ def build(output):
         (bundle/"tournament.example.json").write_text(json.dumps(configuration,indent=2)+"\n",encoding="utf-8")
         if os.name == "nt":
             shutil.copy2(bundle/"YanghaiTournament.exe", bundle/"YanghaiDuel.exe")
-            shutil.copy2(bundle/"YanghaiTournament.exe", bundle/"YanghaiFinalFour.exe")
-            (bundle/"Start-FinalFour-8001.cmd").write_text(
-                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiFinalFour.exe" --port 8001 --no-pause %*\nif errorlevel 1 pause\n',
+            shutil.copy2(bundle/"YanghaiTournament.exe", bundle/"YanghaiFinalFourLAN.exe")
+            (bundle/"Start-FinalFour-LAN-8008.cmd").write_text(
+                '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiFinalFourLAN.exe" --port 8008 --no-pause %*\nif errorlevel 1 pause\n',
                 encoding="ascii")
             (bundle/"Start-Duel-Offline.cmd").write_text(
                 '@echo off\ncd /d "%~dp0"\n"%~dp0YanghaiDuel.exe" --no-pause\nif errorlevel 1 pause\n',
@@ -153,7 +153,7 @@ def build(output):
         shutil.copy2(ROOT/"docs/區網練習大廳.md", bundle/"PRACTICE-LAN-SETUP.md")
         shutil.copy2(ROOT/"docs/GPU與12桌測速.md", bundle/"GPU-AND-BENCHMARK.md")
         shutil.copy2(ROOT/"docs/單機雙隊備用版.md", bundle/"DUEL-READ-ME.md")
-        shutil.copy2(ROOT/"docs/四強賽單機版.md", bundle/"FINAL-FOUR-READ-ME.md")
+        shutil.copy2(ROOT/"docs/四強賽區網版.md", bundle/"FINAL-FOUR-LAN-READ-ME.md")
         for filename in ("TEAM-CODES.csv", "TEAM-CODES.html"):
             shutil.copy2(ROOT/filename, bundle/filename)
         provenance.update({"os":platform.system(),"architecture":platform.machine(),"python":platform.python_version(),

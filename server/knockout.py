@@ -43,8 +43,8 @@ def next_game(state, ident):
         raise ValueError("請先完成前一階段對戰，等待兩隊晉級")
     if match["winner"]:
         raise ValueError("這組對戰已分出勝負，不能再開下一局")
-    if any(game["status"] != "finished" for game in state["games"]):
-        raise ValueError("單機版一次只進行一局，請先完成目前棋局")
+    if any(game["status"] != "finished" for game in match["games"]):
+        raise ValueError("這組已有進行中的棋局，請先完成目前棋局")
     if len(match["games"]) >= match["best_of"]:
         raise ValueError("已達本組對戰局數上限，請核對紀錄")
     return match, len(match["games"]) + 1
